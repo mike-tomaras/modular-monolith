@@ -1,0 +1,9 @@
+﻿@page "/terms-received"
+
+@attribute [Authorize(Roles = "Broker")]
+
+<PageTitle>Terms received - Incepted</PageTitle>
+
+<MudText Typo="Typo.h4" Style="font-weight: 500">Terms received</MudText>
+
+<SubmissionsTable UriPath="terms-received" />

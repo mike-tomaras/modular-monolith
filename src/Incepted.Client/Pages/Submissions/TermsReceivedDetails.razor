@@ -1,0 +1,552 @@
+﻿@page "/terms-received/{dealId:guid}"
+
+@using Incepted.Client.Services
+@using System.Collections.Immutable
+@using System.Text
+@using System.Dynamic
+
+@inject ISnackbar Snackbar
+@inject HttpClient Http
+@inject IDealFileService DealFiles
+@inject IDialogService DialogService
+
+@attribute [Authorize(Roles = "Broker")]
+
+@if (_hasError)
+{
+    <div class="d-flex justify-center">
+        <MudStack AlignItems="AlignItems.Center" Spacing="8">
+            <MudIcon Icon="@Icons.Outlined.ErrorOutline" Style="font-size: 6rem;" Color="Color.Primary" />
+            <MudText Typo="Typo.h6">Oops, could not load the terms received</MudText>
+            <MudText Typo="Typo.body1">Please refresh the page, or contact Incepted support if the problem persists</MudText>
+        </MudStack>
+    </div>
+}
+else if (_loading)
+{
+    <div class="d-flex justify-center">
+        <MudProgressCircular Color="Color.Primary" Size="Size.Large" Indeterminate />
+    </div>
+}
+else
+{
+    <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="my-8">
+        <div>
+            <MudButton Variant="Variant.Text"
+                   Size="Size.Large"
+                   Style="@($"text-transform:none; {GetButtonBackGroundColor("summary")}")"
+                   Color="@GetButtonColor("summary")"
+                   OnClick="@(() => _visibleTab = "summary")"
+                   Class="mr-3">
+                Basic terms
+            </MudButton>
+            <MudButton Variant="Variant.Text"
+                   Size="Size.Large"
+                   Style="@($"text-transform:none; {GetButtonBackGroundColor("pricing")}")"
+                   Color="@GetButtonColor("pricing")"
+                   OnClick="@(() => _visibleTab = "pricing")"
+                   Class="mr-3">
+                Pricing details
+            </MudButton>
+        </div>
+        <MudStack Row AlignItems="AlignItems.Center">
+            @if (_submittedFeedbacks.Count() == 0)
+            {
+                <MudTooltip Text="There are no terms received yet">
+                    <MudInceptedButton IsPrimary Disabled OnClickCallback="@(() => {})">
+                        Go Live!
+                    </MudInceptedButton>
+                </MudTooltip>
+            }
+            else
+            {
+                <MudInceptedButton id="goLive"
+                               IsPrimary
+                               OnClickCallback="OpenGoLiveDialog">
+                    Go Live!
+                </MudInceptedButton>
+            }            
+            <div>
+                @if (_downloadingAllFeedback)
+                {
+                    <MudProgressCircular Color="Color.Primary" Size="Size.Small" Indeterminate="true" />
+                }
+                else
+                {
+                    <MudMenu Icon="@Icons.Outlined.MoreVert"
+                     Size="Size.Medium"
+                     Color="Color.Primary"
+                     AnchorOrigin="Origin.CenterLeft"
+                     TransformOrigin="Origin.TopRight">
+                        <MudMenuItem OnClick="OpenAssignDialog">
+                            <MudStack Row AlignItems="AlignItems.Center">
+                                <MudIcon Icon="@Icons.Outlined.People" Color="Color.Primary" />
+                                <MudText>Assign</MudText>
+                            </MudStack>
+                        </MudMenuItem>
+                        <MudMenuItem OnClick="DownloadTermsReceived">
+                            <MudStack Row AlignItems="AlignItems.Center">
+                                <MudIcon Icon="@Icons.Outlined.Download" Color="Color.Primary" />
+                                <MudText>DownLoad full comparison</MudText>
+                            </MudStack>
+                        </MudMenuItem>
+                    </MudMenu>
+                }
+            </div>
+        </MudStack>
+    </MudStack>
+
+    <MudStack Row AlignItems="AlignItems.End">
+        <MudText Typo="Typo.h5" Style="font-weight: 500" Class="ml-2">@_deal.Name</MudText>
+        <MudLink Href="@($"/your-submissions/{_deal.Id}")" Typo="Typo.body2">Go to submission</MudLink>
+    </MudStack>
+
+    @if (_visibleTab == "summary")
+    {
+        <MudGrid Class="mt-4 mb-8">
+            <MudItem xs="4">
+                <MudCard Elevation="4" Style="@($"height: {TopCardHeight}px")">
+                    <MudCardContent>
+                        <MudText Typo="Typo.body1" Class="mt-2" Style="font-weight: 600">Enterprise Value</MudText>
+                        <MudStack Row AlignItems="AlignItems.Baseline">
+                            <MudText Typo="Typo.h5">@_deal.Pricing.EnterpriseValue.ToAmountString("N0")</MudText>
+                            <MudText Typo="Typo.body1">@_deal.Pricing.EnterpriseValue.Currency.ToString()</MudText>
+                        </MudStack>
+
+                        <MudText Typo="Typo.body1" Style="font-weight: 600" Class="mt-6">Target</MudText>
+                        <MudText Typo="Typo.body1">@(string.IsNullOrEmpty(_deal.Terms.Target) ? "-" : _deal.Terms.Target)</MudText>
+
+                            <MudText Typo="Typo.body1" Style="font-weight: 600" Class="mt-6">Industry</MudText>
+                            <MudText Typo="Typo.body1">@(string.IsNullOrEmpty(_deal.Terms.Industry) ? "-" : _deal.Terms.Industry)</MudText>
+                        </MudCardContent>
+                    </MudCard>
+                </MudItem>
+                <MudItem xs="8">
+                    <MudCard Elevation="4" Style="@($"height: {TopCardHeight}px")">
+                        <MudCardHeader>
+                            <CardHeaderContent>
+                                <MudText Typo="Typo.body1" Class="mt-2" Style="font-weight: 600">Feedback status</MudText>
+                            </CardHeaderContent>
+                        </MudCardHeader>
+                        <MudCardContent Class="my-1 py-1">
+                            <MudTable Elevation="0" Items="@_feedbacks">
+                                <HeaderContent>
+                                    <MudTh>Comparing</MudTh>
+                                    <MudTh>Insurer</MudTh>
+                                    <MudTh>Status</MudTh>
+                                    <MudTh>Nudge</MudTh>
+                                    <MudTh>Download</MudTh>
+                                </HeaderContent>
+                                <RowTemplate>
+                                    <MudTd DataLabel="Comparing">
+                                        <MudCheckBox Checked="@context.Selected"
+                                         CheckedChanged="@((bool val) =>  CompareSelectionChanged(val, context.Data))"
+                                         Disabled="@(!context.Data.Submitted && !context.Data.ForReview)"
+                                         Size="Size.Small"
+                                         Color="Color.Primary" />
+                                    </MudTd>
+                                    <MudTd DataLabel="Insurer">@context.Data.InsuranceCompanyName</MudTd>
+                                    <MudTd DataLabel="Status"><MudChip Size="Size.Small" Color="@GetStatusChipColor(context.Data)" Text="@GetStatusChipText(context.Data)" /></MudTd>
+                                    <MudTd>
+                                        <MudIconButton Icon="@Icons.Outlined.NotificationsActive"
+                                           Size="Size.Small"
+                                           OnClick="@(() => NudgeInsurer(context.Data))"
+                                           Disabled="@(context.Data.Submitted || context.Data.Declined)" />
+                                    </MudTd>
+                                    <MudTd>
+                                    @if (context.Downloading)
+                                    {
+                                        <MudProgressCircular Color="Color.Primary" Size="Size.Small" Indeterminate="true" />
+                                    }
+                                    else
+                                    {
+                                        <MudIconButton OnClick="@(() => DownloadFeedback(context.Data))"
+                                           Disabled="@(!context.Data.Submitted && !context.Data.ForReview)"
+                                           Icon="@Icons.Outlined.Download"
+                                           Size="Size.Small" />
+                                    }
+                                </MudTd>
+                            </RowTemplate>
+                        </MudTable>
+                    </MudCardContent>
+                </MudCard>
+            </MudItem>
+            <MudItem xs="8"><MudText Typo="Typo.h5">Compare your terms</MudText></MudItem>
+            <MudItem xs="4" />@*Grid line filler*@
+            <MudItem xs="8">
+                <MudText Typo="Typo.body1">
+                    Select at least two insurers you want to compare using the checkboxes in the table above.
+                    For a more detailed comparison, download the
+                    <MudLink @onclick="DownloadTermsReceived">full comparison</MudLink>
+                    (also available in the top right menu).
+                </MudText>
+            </MudItem>
+            <MudItem xs="4" />@*Grid line filler*@
+            @if (_selectedFeedbacks.Count() < 2)
+            {
+                <MudItem xs="12">
+                    <MudStack AlignItems="AlignItems.Center" Spacing="8" Class="mt-4">
+                        <MudIcon Icon="@Icons.Outlined.FolderOff" Style="font-size: 6rem;" Color="Color.Primary" />
+                        <MudText Typo="Typo.h6">Please select more than one insurers to compare</MudText>
+                        <MudText Typo="Typo.body2">You can always download the <MudLink @onclick="DownloadTermsReceived">full comparison</MudLink></MudText>
+                    </MudStack>
+                </MudItem>
+            }
+            else
+            {
+                @foreach (var feedback in RankingCalc.Rank(_feedbacks.Where(f => f.Selected).Select(f => f.Data))
+                                            .OrderByDescending(s => s.Value)
+                                            .Select(x => x.Key))
+                {
+                    <MudItem xs="4">
+                        <FeedbackCard Feedback="feedback"
+                      HasBestPrice="@(RankingCalc.LowestPrice(_selectedFeedbacks).Any(f => f.Id == feedback.Id))"
+                      HasBestDeminimis="@(RankingCalc.LowestDeminimis(_selectedFeedbacks).Any(f => f.Id == feedback.Id))"
+                      HasBestCoverage="@(RankingCalc.HighestCoverage(_selectedFeedbacks).Any(f => f.Id == feedback.Id))" />
+                    </MudItem>
+                }
+                @if (_feedbacks.Count % 3 != 0) //pad the grid until next row if the selected feedbacks for comparison do not fill a row
+                {
+                    <MudItem xs="@(_feedbacks.Count % 3 * 4)" />
+                }
+                <MudItem xs="6">
+                    <MudCard Elevation="4" Style="height: 575px">
+                        <MudCardHeader>
+                            <CardHeaderContent>
+                                <MudText Typo="Typo.body1" Class="mt-2" Style="font-weight: 600">Price comparison</MudText>
+                            </CardHeaderContent>
+                            <CardHeaderActions>
+                                <MudIconButton Icon="@Icons.Outlined.ZoomIn" Color="Color.Default" OnClick="@(() => OpenFullScreenChartDialog("Pricing"))" />
+                            </CardHeaderActions>
+                        </MudCardHeader>
+                        <MudCardContent Class="my-1 py-1">
+                            <ChartForPricingCollation @ref="_priceChart" Feedbacks="_selectedFeedbacks" />
+                        </MudCardContent>
+                    </MudCard>
+                </MudItem>
+                <MudItem xs="6">
+                    <MudCard Elevation="4" Style="height: 575px">
+                        <MudCardHeader>
+                            <CardHeaderContent>
+                                <MudText Typo="Typo.body1" Class="mt-2" Style="font-weight: 600">Deminimis comparison</MudText>
+                            </CardHeaderContent>
+                            <CardHeaderActions>
+                                <MudIconButton Icon="@Icons.Outlined.ZoomIn" Color="Color.Default" OnClick="@(() => OpenFullScreenChartDialog("De minimis"))" />
+                            </CardHeaderActions>
+                        </MudCardHeader>
+                        <MudCardContent Class="my-1 py-1">
+                            <ChartForDeminimisCollation @ref="_deminimisChart" Feedbacks="_selectedFeedbacks" />
+                        </MudCardContent>
+                    </MudCard>
+                </MudItem>
+                <MudItem xs="6">
+                    <MudCard Elevation="4" Style="height: 575px">
+                        <MudCardHeader>
+                            <CardHeaderContent>
+                                <MudText Typo="Typo.body1" Class="mt-2" Style="font-weight: 600">Coverage comparison</MudText>
+                            </CardHeaderContent>
+                            <CardHeaderActions>
+                                <MudIconButton Icon="@Icons.Outlined.ZoomIn" Color="Color.Default" OnClick="@(() => OpenFullScreenChartDialog("Coverage"))" />
+                            </CardHeaderActions>
+                        </MudCardHeader>
+                        <MudCardContent Class="my-1 py-1">
+                            <ChartForCoverageCollation @ref="_coverageChart" Feedbacks="_selectedFeedbacks" />
+                        </MudCardContent>
+                    </MudCard>
+                </MudItem>
+                <MudItem xs="6">
+                    <MudCard Elevation="4" Style="min-height: 575px">
+                        <MudCardHeader>
+                            <CardHeaderContent>
+                                <MudText Typo="Typo.body1" Class="mt-2" Style="font-weight: 600">Exclusions comparison</MudText>
+                            </CardHeaderContent>
+                            <CardHeaderActions>
+                                <MudIconButton Icon="@Icons.Outlined.ZoomIn" Color="Color.Default" OnClick="@OpenFullScreenMatrixDialog" />
+                            </CardHeaderActions>
+                        </MudCardHeader>
+                        <MudCardContent Class="my-1 py-1">
+                            <MudText Class="mb-2">
+                                Here are some non-standard exclusions. If you want a full comparison you can download it
+                                <MudLink @onclick="DownloadTermsReceived">here</MudLink>
+                                or press the lens in this panel to see more.
+                            </MudText>
+                            <MatrixForExclusionCollation Feedbacks="_selectedFeedbacks" ShowOnlyNonStandardExclusions="true" />
+                        </MudCardContent>
+                    </MudCard>
+                </MudItem>
+            }
+        </MudGrid>
+    }
+    else if (_visibleTab == "pricing")
+    {
+        @if (_feedbacks.Any(f => f.Data.Submitted))
+        {
+            <MudText Typo="Typo.body1" Class="mt-6">
+                Here is the pricing grouped by limit.
+                If you prefer Excel, download the
+                <MudLink @onclick="DownloadTermsReceived">full comparison</MudLink>
+                (also available in the top right menu).
+            </MudText>
+            <MudExpansionPanels MultiExpansion="true" Class="my-4">
+                @foreach (var limit in _deal.Pricing.Limits.Where(l => l.Enabled))
+                {
+                    <MudExpansionPanel Text="@($"{@limit.ToString()}% - {@limit.ToAmount(_deal.Pricing.EnterpriseValue).ToString("N0")}")">
+                        <MudGrid Class="mt-4 mb-8">
+                            <MudItem xs="12">
+                                <MudCard Elevation="0">
+                                    <MudCardContent>
+                                        <MudStack Row>
+                                            <MudPaper Elevation="0" Class="d-flex mr-4" MinWidth="120px">
+                                                <MudText Typo="Typo.subtitle1" Class="align-self-end">Retention<br />(% of EV)</MudText>
+                                            </MudPaper>
+                                            <MudGrid>
+                                                <MudItem xs="4" Class="d-flex">
+                                                    <MudText Typo="Typo.subtitle1" Class="align-self-end">Insurer</MudText>
+                                                </MudItem>
+                                                <MudItem xs="2" Class="d-flex">
+                                                    <MudText Typo="Typo.subtitle1" Class="align-self-end">Premium</MudText>
+                                                </MudItem>
+                                                <MudItem xs="2" Class="d-flex">
+                                                    <MudText Typo="Typo.subtitle1" Class="align-self-end">RoL</MudText>
+                                                </MudItem>
+                                                <MudItem xs="2" Class="d-flex">
+                                                    <MudText Typo="Typo.subtitle1" Class="align-self-end">Enhancements</MudText>
+                                                </MudItem>
+                                                <MudItem xs="2" Class="d-flex">
+                                                    <MudText Typo="Typo.subtitle1" Class="align-self-end">Total</MudText>
+                                                </MudItem>
+                                            </MudGrid>
+                                        </MudStack>
+                                    </MudCardContent>
+                                </MudCard>
+                            </MudItem>
+                            @foreach (var retention in _deal.Pricing.Retentions.Where(r => r.Enabled).OrderByDescending(x => x.Value))
+                            {
+                                <MudItem xs="12">
+                                    <MudCard Elevation="2">
+                                        <MudCardContent>
+                                            <MudStack Row AlignItems="AlignItems.Center">
+                                                <MudPaper Elevation="0" Class="mr-6" MinWidth="120px">
+                                                    <MudText Typo="Typo.h3" Color="Color.Primary">@retention.ToString()</MudText>
+                                                </MudPaper>
+                                                <div>
+                                                    <MudGrid>
+                                                        @foreach (var feedback in _feedbacks.Where(f => f.Data.Submitted))
+                                                        {
+                                                            <MudItem xs="4" Class="d-flex">
+                                                                <MudText Typo="Typo.h6" Class="align-self-center">@feedback.Data.InsuranceCompanyName</MudText>
+                                                            </MudItem>
+                                                            <MudItem xs="2">
+                                                                <MudText Typo="Typo.h6" Class="align-self-center">@feedback.Data.Pricing.GetPremium(limit, retention).ToAmountString()</MudText>
+                                                            </MudItem>
+                                                            <MudItem xs="2" Class="d-flex">
+                                                                <MudText Typo="Typo.h6" Class="align-self-center">@PricingCalc.RoLString(feedback.Data.Pricing.EnterpriseValue, feedback.Data.Pricing.GetPremium(limit, retention), limit)</MudText>
+                                                            </MudItem>
+                                                            <MudItem xs="2" Class="d-flex">
+                                                                <MudText Typo="Typo.h6" Class="align-self-center">@PricingCalc.EnhancementValueString(feedback.Data.Pricing.GetPremium(limit, retention), feedback.Data.Enhancements)</MudText>
+                                                            </MudItem>
+                                                            <MudItem xs="2" Class="d-flex">
+                                                                <MudText Typo="Typo.h6" Class="align-self-center" Style="font-weight: 600">@PricingCalc.TotalString(feedback.Data.Pricing.GetPremium(limit, retention), feedback.Data.Enhancements, feedback.Data.Pricing.UwFee)</MudText>
+                                                            </MudItem>
+                                                        }
+                                                    </MudGrid>
+                                                </div>
+                                            </MudStack>
+                                        </MudCardContent>
+                                    </MudCard>
+                                </MudItem>
+                            }
+                        </MudGrid>
+                    </MudExpansionPanel>
+                }
+            </MudExpansionPanels>
+        }
+        else
+        {
+            <MudText Class="mt-6">No feedback has been submitted yet for this deal.</MudText>
+        }
+    }
+}
+
+
+@code {
+    [Parameter] public Guid DealId { get; set; }
+
+    private string _visibleTab = "summary";
+    private DealSubmissionDTO _deal = DealSubmissionDTO.Factory.Empty;
+    private List<(SubmissionFeedbackDTO Data, bool Selected, bool Downloading)> _feedbacks = new();
+    private IEnumerable<SubmissionFeedbackDTO> _selectedFeedbacks => _feedbacks.Where(f => f.Selected).Select(f => f.Data);
+    private IEnumerable<SubmissionFeedbackDTO> _submittedFeedbacks => _feedbacks.Where(f => f.Data.Submitted).Select(f => f.Data);
+    private IEnumerable<SubmissionFeedbackDTO> _feedbacksWithBestPrice;
+    private IEnumerable<SubmissionFeedbackDTO> _feedbacksWithBestCoverage;
+    private IEnumerable<SubmissionFeedbackDTO> _feedbacksWithBestDeminimis;
+
+    //page statuses
+    private bool _hasError = false;
+    private bool _downloadingAllFeedback = false;
+    private bool _loading => (_deal == null || _deal.Id == Guid.Empty) && !_hasError;
+
+    //chart data
+    private ChartForPricingCollation? _priceChart;
+    private ChartForDeminimisCollation? _deminimisChart;
+    private ChartForCoverageCollation? _coverageChart;
+
+    private Color GetButtonColor(string button) => _visibleTab == button ? Color.Primary : Color.Default;
+    private string GetButtonBackGroundColor(string button) => _visibleTab == button ? "background-color: var(--mud-palette-primary-hover)" : "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        (await Http
+            .GetFromApiAsync<DealSubmissionDTO>(
+                path: $"api/v1/deals/{DealId}",
+                Snackbar
+            ))
+            .Match(
+                some: deal => _deal = deal,
+                none: () => _hasError = true
+            );
+
+        (await Http
+            .GetFromApiAsync<IEnumerable<SubmissionFeedbackDTO>>(
+                path: $"api/v1/deals/{DealId}/feedback/all",
+                Snackbar
+            ))
+            .Match(
+                some: feedbacks => _feedbacks = feedbacks.Select(f => (f, f.Submitted, false)).ToList(),
+                none: () => _hasError = true
+            );
+    }
+
+    private async Task OpenAssignDialog()
+    {
+        var parameters = new DialogParameters { ["DealId"] = _deal.Id, ["Assignees"] = ImmutableList.CreateRange(_deal.Assignees) };
+        var options = new MudFormDialogControls().DefaultDialogOptions;
+
+        var dialog = DialogService.Show<EditAssigneesDialog>("Assign people to the deal", parameters, options);
+        var result = await dialog.Result;
+
+        if (!result.Cancelled)
+        {
+            _deal = _deal with { Assignees = ((IEnumerable<EmployeeDTO>)result.Data).ToImmutable() };
+        }
+    }
+
+    private void OpenGoLiveDialog()
+    {
+        var parameters = new DialogParameters
+            {
+                ["Deal"] = _deal,
+                ["Feedbacks"] = _feedbacks.Where(f => f.Data.Submitted).Select(f => f.Data)
+            };
+        var options = new MudFormDialogControls().DefaultDialogOptions;
+
+        var dialog = DialogService.Show<GoLiveDialog>("Go Live", parameters, options);
+    }
+
+    private void NudgeInsurer(SubmissionFeedbackDTO feedback)
+    {
+        var parameters = new DialogParameters
+            {
+                ["Feedback"] = feedback
+            };
+        var options = new MudFormDialogControls().DefaultDialogOptions;
+
+        var dialog = DialogService.Show<NudgeInsurerDialog>("Nudge", parameters, options);
+    }
+
+    private void OpenFullScreenChartDialog(string chartType)
+    {
+        var parameters = new DialogParameters
+            {
+                ["Feedbacks"] = _selectedFeedbacks,
+                ["ChartType"] = chartType
+            };
+        var options = new MudFormDialogControls().DefaultDialogOptions;
+
+        DialogService.Show<FullScreenChartDialog>($"{chartType} chart", parameters, options);
+    }
+    private void OpenFullScreenMatrixDialog()
+    {
+        var parameters = new DialogParameters
+            {
+                ["Feedbacks"] = _selectedFeedbacks,
+                ["ChartType"] = "Exclusions"
+            };
+        var options = new MudFormDialogControls().DefaultDialogOptions;
+
+        DialogService.Show<FullScreenChartDialog>($"Exclusions matrix", parameters, options);
+    }
+
+    private async Task CompareSelectionChanged(bool val, SubmissionFeedbackDTO feedback)
+    {
+        _feedbacks.ReplaceInList<(SubmissionFeedbackDTO Data, bool Selected, bool Downloading)>(
+            f => f.Data.Id == feedback.Id,
+            (feedback, val, false));
+
+        await _priceChart?.Update();
+        await _deminimisChart?.Update();
+        await _coverageChart?.Update();
+    }
+
+    private async Task DownloadTermsReceived()
+    {
+        if (_submittedFeedbacks.Count() == 0)
+        {
+            Snackbar.Add("There are no terms received yet. Nothing to download", Severity.Info);
+            return;
+        }
+
+        _downloadingAllFeedback = true;
+
+        (await Http
+            .PostToApiAsync<IEnumerable<SubmissionFeedbackDTO>>(
+                path: "api/v1/docgen/nbi/all",
+                _submittedFeedbacks,
+                Snackbar
+            ))
+            .MatchSome(async response =>
+                await DealFiles.DownloadFileAsync(
+                    await response.Content.ReadAsByteArrayAsync(),
+                    $"NBI comparison - {_submittedFeedbacks.First().Name} - {DateTime.Now.ToLocalTime().ToString("yyyy-MM-dd HH_mm_ss")}.xlsx"
+                )
+            );
+
+        _downloadingAllFeedback = false;
+    }
+
+    private async Task DownloadFeedback(SubmissionFeedbackDTO feedback)
+    {
+        var selected = _feedbacks.Single(f => f.Data.Id == feedback.Id).Selected;
+        _feedbacks.ReplaceInList(f => f.Item1.Id == feedback.Id, (feedback, selected, true));
+
+        (await Http
+            .PostToApiAsync<SubmissionFeedbackDTO>(
+                path: "api/v1/docgen/nbi",
+                feedback,
+                Snackbar
+            ))
+            .MatchSome(async response =>
+                await DealFiles.DownloadFileAsync(
+                    await response.Content.ReadAsByteArrayAsync(),
+                    $"NBI - {feedback.Name} - {DateTime.Now.ToLocalTime().ToString("yyyy-MM-dd HH_mm_ss")}.zip"
+                )
+            );
+
+        _feedbacks.ReplaceInList(f => f.Item1.Id == feedback.Id, (feedback, selected, false));
+    }
+
+    private int TopCardHeight => Math.Max(_feedbacks.Count * 74 + 112, 210);
+    private Color GetStatusChipColor(SubmissionFeedbackDTO feedback)
+    {
+        if (feedback.Declined) return Color.Error;
+        if (feedback.Submitted) return Color.Success;
+        return Color.Default;
+    }
+    private string GetStatusChipText(SubmissionFeedbackDTO feedback)
+    {
+        if (feedback.Declined) return "Declined";
+        if (feedback.ForReview) return "Pending Confirmation";
+        if (feedback.Submitted) return "Terms Received";
+        return "Waiting";
+    }
+}  

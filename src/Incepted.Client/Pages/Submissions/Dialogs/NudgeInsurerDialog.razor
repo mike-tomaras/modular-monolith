@@ -1,0 +1,56 @@
+﻿@inject HttpClient Http
+@inject ISnackbar Snackbar
+
+<MudDialog Options="_dialogControls.DefaultDialogOptions">
+    <TitleContent>
+        <MudText Typo="Typo.h6">Nudge Insurer</MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudText>Send a reminder about the submission to @Feedback.InsuranceCompanyName?</MudText>
+    </DialogContent>
+    <DialogActions>
+        <MudButton id="dialogCancel" OnClick="Cancel">Cancel</MudButton>
+        <MudButton id="dialogSubmit" Disabled="@_dialogControls.Processing" Variant="Variant.Filled" Color="Color.Primary" OnClick="Nudge" Class="px-10">
+            @if (_dialogControls.Processing)
+            {
+                <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate />
+                <MudText Class="ms-2">Nudging</MudText>
+            }
+            else
+            {
+                <MudText>Nudge</MudText>
+            }
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+
+@code {
+    [Parameter, EditorRequired] public SubmissionFeedbackDTO Feedback { get; set; }
+    [CascadingParameter] MudDialogInstance MudDialog { get; set; }
+
+    private MudFormDialogControls _dialogControls = new();
+
+    void Cancel() => MudDialog.Cancel();
+
+    private async Task Nudge()
+    {
+        _dialogControls.Processing = true;
+
+        var payload = new NudgeDTO(Feedback.Id, Feedback.SubmissionId, Feedback.InsuranceCompanyId);
+
+        (await Http
+            .PutToApiAsync(
+                path: $"api/v1/deals/feedback/nudge",
+                payload,
+                Snackbar
+            ))
+            .MatchSome(_ =>
+            {
+                Snackbar.Add($"Sent the reminder to {Feedback.InsuranceCompanyName}.", Severity.Success);
+                MudDialog.Close();
+            });
+
+        _dialogControls.Processing = false;        
+    }
+}

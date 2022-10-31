@@ -1,0 +1,31 @@
+﻿@using System.Diagnostics.CodeAnalysis
+
+@inject NavigationManager Navigation
+
+@attribute [ExcludeFromCodeCoverage]
+
+<CascadingAuthenticationState>
+    <Router AppAssembly="@typeof(App).Assembly">
+        <Found Context="routeData">
+            <AuthorizeRouteView RouteData="@routeData" DefaultLayout="@typeof(MainLayout)">
+                <Authorizing>
+                    <AuthLoader Message="Checking to see if you're logged in, please wait..." />
+                </Authorizing>
+                <NotAuthorized>
+                    <LoginOrHideTheUI />
+                </NotAuthorized>
+            </AuthorizeRouteView>
+            <FocusOnNavigate RouteData="@routeData" Selector="h1" />
+        </Found>
+        <NotFound>
+            <PageTitle>Not found</PageTitle>
+            <LayoutView Layout="@typeof(MainLayout)">
+                <MudStack AlignItems="AlignItems.Center" Justify="Justify.Center">
+                    <MudText Color="Color.Primary" Typo="Typo.h1" Style="font-weight: 700">404</MudText>
+                    <MudText Typo="Typo.h6">Looks like you ended up at an adress with nothing in it!</MudText>
+                    <MudText Typo="Typo.body1">Try to navigate to something else or just click <MudLink Href="/">here</MudLink></MudText>
+                </MudStack>                
+            </LayoutView>
+        </NotFound>
+    </Router>
+</CascadingAuthenticationState>

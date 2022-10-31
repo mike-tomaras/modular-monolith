@@ -1,0 +1,239 @@
+﻿@page "/your-account"
+@using System.Security.Claims
+@using Incepted.Client.Services
+
+@inject HttpClient Http
+@inject ISnackbar Snackbar
+@inject IDealFileService DealFiles
+@inject AuthenticationStateProvider AuthenticationStateProvider
+
+@attribute [Authorize(Roles = "Insurer,Broker")]
+
+<PageTitle>Account</PageTitle>
+
+<MudGrid Class="my-8">
+    <MudItem xs="8">
+        <MudCard Elevation="4">
+            <MudCardHeader>
+                <CardHeaderContent>
+                    <MudText Typo="Typo.h5" Style="font-weight: 500">Your details</MudText>
+                </CardHeaderContent>
+                <CardHeaderActions>
+                    <MudIconButton 
+                        Icon="@(_editingUserDetails ? Icons.Outlined.Close : Icons.Outlined.Edit)" 
+                        Color="Color.Default" 
+                        OnClick="@(() => _editingUserDetails = !_editingUserDetails)" />
+                </CardHeaderActions>
+            </MudCardHeader>
+            <MudCardContent>
+                @if (_editingUserDetails)
+                {
+                    <MudForm @ref="_form" @bind-IsValid="_validationSuccess">
+                        <MudText Typo="Typo.body1" Class="mb-4">Request an update of your details.</MudText>
+                        <MudText Typo="Typo.body2" Class="mb-4">Your request will be reviewed and actioned as soon as possible.</MudText>
+                        <MudTextField @bind-Value="_firstName"
+                                  Label="First name"
+                                  Variant="Variant.Outlined"
+                                  Required
+                                  RequiredError="Please enter a first name"
+                                  Immediate
+                                  Clearable
+                                  Class="mb-4"/>
+                        <MudTextField @bind-Value="_lastName"
+                                  Label="Last name"
+                                  Variant="Variant.Outlined"
+                                  Required
+                                  RequiredError="Please enter a last name"
+                                  Immediate
+                                  Clearable 
+                                  Class="mb-4" />
+                        <MudTextField @bind-Value="_email"
+                                  Label="Email"
+                                  Mask="@emailMask"
+                                  Variant="Variant.Outlined"
+                                  Required
+                                  RequiredError="An email is necessary for access"
+                                  Immediate
+                                  Clearable 
+                                  Class="mb-4" />
+                    </MudForm>
+                }
+                else
+                {
+                    <MudGrid>
+                        <MudItem xs="3">
+                            <MudText Typo="Typo.body1" Class="mb-4">First Name:</MudText>
+                        </MudItem>
+                        <MudItem xs="9">
+                            <MudText Typo="Typo.body1" Class="mb-4">@_firstName</MudText>
+                        </MudItem>
+                        <MudItem xs="3">
+                            <MudText Typo="Typo.body1" Class="mb-4">Last Name:</MudText>
+                        </MudItem>
+                        <MudItem xs="9">
+                            <MudText Typo="Typo.body1" Class="mb-4">@_lastName</MudText>
+                        </MudItem>
+                        <MudItem xs="3">
+                            <MudText Typo="Typo.body1" Class="mb-4">Email:</MudText>
+                        </MudItem>
+                        <MudItem xs="9">
+                            <MudText Typo="Typo.body1" Class="mb-4">@_email</MudText>
+                        </MudItem>
+                    </MudGrid>                    
+                }
+                
+            </MudCardContent>
+            <MudCardActions>
+                <MudInceptedButton id="dialogSubmit"
+                                   Disabled="!_editingUserDetails || !_validationSuccess || _processing"
+                                   OnClickCallback="@(() => SaveUserDetails())">
+                    @if (_processing)
+                    {
+                        <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate />
+                        <MudText Class="ms-2">Saving</MudText>
+                    }
+                    else
+                    {
+                        <MudText>Save</MudText>
+                    }
+                </MudInceptedButton>
+            </MudCardActions>
+        </MudCard>
+    </MudItem>
+    <MudItem xs="4" />
+    <MudItem xs="8">
+        <MudCard Elevation="4">
+            <MudCardHeader>
+                <CardHeaderContent>
+                    <MudText Typo="Typo.h5" Style="font-weight: 500">Your company's default T&Cs</MudText>
+                </CardHeaderContent>                
+            </MudCardHeader>
+            <MudCardContent>     
+                @if (_loading)
+                {
+                    <div class="d-flex justify-center">
+                        <MudProgressCircular Color="Color.Primary" Size="Size.Large" Indeterminate />
+                    </div>
+                }
+                @if (_tcs != null)
+                {
+                    <MudText Class="mb-4">These T&Cs will be automatically attached to every NBI you send to brokers.</MudText>
+                    <MudStack Row AlignItems="AlignItems.Center" Justify="Justify.Center" Class="mb-4">
+                        <MudText Typo="Typo.h6">@_tcs.FileName</MudText>
+                        <MudIconButton Icon="@Icons.Outlined.Download" aria-label="Download" OnClick="async () => await DealFiles.DownloadTCsAsync(_tcs)" />
+                    </MudStack>
+                }
+                <MudText Typo="Typo.body1" Class="mt-4 ">Upload a new version of the T&Cs</MudText>
+                <MudPaper @ondragenter="@SetDragClass" @ondragleave="@ClearDragClass" @ondragend="@ClearDragClass" Height="160px" Outlined Class="@_dragClass">
+                    @if (!_clearing)
+                    {
+                        <InputFile OnChange="OnInputFileChanged" class="absolute mud-width-full mud-height-full overflow-hidden z-2" style="opacity:0;" />
+                    }
+                    <MudStack AlignItems="AlignItems.Center" Justify="Justify.FlexStart">
+                        <MudIcon Icon="@Icons.Outlined.DriveFolderUpload" Color="Color.Primary" Style="font-size: 4rem;" />
+                        <MudText Typo="Typo.body1" Color="Color.Primary">Click here or drag a file in</MudText>
+                    </MudStack>
+                    <MudOverlay Visible="_loading" DarkBackground Absolute>
+                        <MudProgressCircular Color="Color.Primary" Indeterminate />
+                    </MudOverlay>
+                </MudPaper>
+            </MudCardContent>             
+        </MudCard>
+    </MudItem>
+    <MudItem xs="4" />
+</MudGrid>
+
+
+@code {
+    private bool _validationSuccess;
+    private bool _processing;
+    private bool _editingUserDetails;
+    private string _firstName;
+    private string _lastName;
+    private string _email;
+    private MudForm? _form;
+    private IMask emailMask = RegexMask.Email();
+    private FileDTO _tcs;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var errorMessage = "We could not load your account data. Please try again and contact incepted if the problem does not go away.";
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+
+        authState.User.Claims
+        .GetUserMetadata()
+        .Match(
+            some: userData => 
+            {
+                _firstName = userData.FirstName;
+                _lastName = userData.LastName;
+            },
+            none: () => Snackbar.Add(errorMessage, Severity.Error)
+        );
+
+        authState.User.Claims
+        .GetClaimValue(ClaimTypes.Email)
+        .Match(
+            some: email => _email = email,
+            none: () => Snackbar.Add(errorMessage, Severity.Error)
+        );
+        
+        _loading = true;
+
+        (await Http
+            .GetFromApiAsync<FileDTO>(
+                path: $"api/v1/company/tcs",
+                Snackbar
+            ))
+            .Match(
+                some: file => _tcs = file,
+                none: () => Snackbar.Add("Something went wrong retrieving your T&Cs details", Severity.Error)
+            );
+
+        _loading = false;
+    }
+
+    private async Task SaveUserDetails()
+    {
+        _processing = true;
+
+        var payload = new UserDTO(_firstName, _lastName, _email);
+
+        (await Http
+            .PutToApiAsync<UserDTO>(
+                path: "api/v1/company/employee",
+                payload,
+                Snackbar
+            ))
+            .MatchSome(_ => _processing = false);
+    }
+
+    //T&Cs file upload stuff
+    private bool _clearing = false;
+    private bool _loading = false;
+    private static string _defaultDragClass = "relative rounded-lg border-2 border-dashed pa-4 mud-width-full mud-height-full";
+    private string _dragClass = _defaultDragClass;
+
+    private async Task OnInputFileChanged(InputFileChangeEventArgs e)
+    {
+        ClearDragClass();
+
+        _loading = true;
+
+        (await DealFiles.UploadTCsAsync(e))
+            .Match(
+                some: uploadResult =>
+                {
+                    if (uploadResult.Uploaded) _tcs = uploadResult.File;
+                    else Snackbar.Add("Could not upload your T&Cs file.");
+                },
+                none: _ => Snackbar.Add("Could not upload your T&Cs file.")
+            );
+
+        _loading = false;
+    }
+
+    private void SetDragClass() => _dragClass = $"{_defaultDragClass} mud-border-primary";
+
+    private void ClearDragClass() => _dragClass = _defaultDragClass;
+}

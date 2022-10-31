@@ -1,0 +1,1164 @@
+﻿@page "/submissions/{dealId:guid}"
+
+@using Incepted.Client.Services
+@using System.Collections.Immutable
+@using KellermanSoftware.CompareNetObjects
+
+@inject ISnackbar Snackbar
+@inject HttpClient Http
+@inject IDealFileService DealFiles
+@inject IDialogService DialogService
+
+@attribute [Authorize(Roles = "Insurer")]
+
+@if (_hasError)
+{
+    <div class="d-flex justify-center">
+        <MudStack AlignItems="AlignItems.Center" Spacing="8">
+            <MudIcon Icon="@Icons.Outlined.ErrorOutline" Style="font-size: 6rem;" Color="Color.Primary" />
+            <MudText Typo="Typo.h6">Oops, could not load the deal details</MudText>
+            <MudText Typo="Typo.body1">Please refresh the page, or contact Incepted support if the problem persists</MudText>
+        </MudStack>
+    </div>
+}
+else if (_loading)
+{
+    <div class="d-flex justify-center">
+        <MudProgressCircular Color="Color.Primary" Size="Size.Large" Indeterminate />
+    </div>
+}
+else
+{
+    <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="my-8">
+        <div>
+            <MudButton Variant="Variant.Text"
+                   Size="Size.Large"
+                   Style="@($"text-transform:none; {GetButtonBackGroundColor("terms")}")"
+                   Color="@GetButtonColor("terms")"
+                   OnClick="@(() => _visibleTab = "terms")"
+                   Class="mr-3">
+                Basic terms
+            </MudButton>
+            <MudButton Variant="Variant.Text"
+                   Size="Size.Large"
+                   Style="@($"text-transform:none; {GetButtonBackGroundColor("pricing")}")"
+                   Color="@GetButtonColor("pricing")"
+                   OnClick="@(() => _visibleTab = "pricing")"
+                   Class="mr-3">
+                Pricing details
+            </MudButton>
+            <MudButton Variant="Variant.Text"
+                   Size="Size.Large"
+                   Style="@($"text-transform:none; {GetButtonBackGroundColor("enhancements")}")"
+                   Color="@GetButtonColor("enhancements")"
+                   OnClick="@(() => _visibleTab = "enhancements")"
+                   Class="mr-3">
+                Enhancements
+            </MudButton>
+            <MudButton Variant="Variant.Text"
+                   Size="Size.Large"
+                   Style="@($"text-transform:none; {GetButtonBackGroundColor("warranties")}")"
+                   Color="@GetButtonColor("warranties")"
+                   OnClick="@(() => _visibleTab = "warranties")">
+                Warranties
+            </MudButton>
+            <MudButton Variant="Variant.Text"
+                   Size="Size.Large"
+                   Style="@($"text-transform:none; {GetButtonBackGroundColor("exclusions")}")"
+                   Color="@GetButtonColor("exclusions")"
+                   OnClick="@(() => _visibleTab = "exclusions")">
+                Exclusions and UW focus
+            </MudButton>
+        </div>
+        <MudStack Row AlignItems="AlignItems.Center">
+            <MudInceptedButton id="decline"
+                           Label="Decline"
+                           IsPrimary="false"
+                           OnClickCallback="@(() => OpenDeclineDialog())">
+                Decline
+            </MudInceptedButton>
+            <MudInceptedButton id="submitFeedback"
+                           Label="Submit"
+                           IsPrimary
+                           OnClickCallback="OpenSubmitFeedbackDialog">
+                @if (_feedback.Submitted)
+                {
+                    @((MarkupString)"Amend")
+                }
+                else
+                {
+                    @((MarkupString)"Submit")
+                }                
+            </MudInceptedButton>
+            <div>
+                @if(_downloading)
+                {
+                    <MudProgressCircular Color="Color.Primary" Size="Size.Small" Indeterminate="true" />
+                }
+                else
+                {
+                    <MudMenu 
+                        Icon="@Icons.Outlined.MoreVert" 
+                        Size="Size.Medium"
+                        Color="Color.Primary"
+                        AnchorOrigin="Origin.CenterLeft"
+                        TransformOrigin="Origin.TopRight">
+                        <MudMenuItem OnClick="OpenAssignDialog">
+                            <MudStack Row AlignItems="AlignItems.Center">
+                                <MudIcon Icon="@Icons.Outlined.People" Color="Color.Primary" />
+                                <MudText>Assign</MudText>
+                            </MudStack>
+                        </MudMenuItem>
+                        <MudMenuItem OnClick="DownloadFeedback">
+                            <MudStack Row AlignItems="AlignItems.Center">
+                                <MudIcon Icon="@Icons.Outlined.Download" Color="Color.Primary" />
+                                <MudText>DownLoad</MudText>
+                            </MudStack>                    
+                        </MudMenuItem>
+                    </MudMenu>
+                }
+            </div>                        
+        </MudStack>        
+    </MudStack>
+
+    <MudText Typo="Typo.h5" Style="font-weight: 500" Class="ml-2">@_deal.Name</MudText>
+
+    @if (_deal.Modifications.Any())
+    {
+        <MudAlert Severity="Severity.Warning" Elevation="3" Class="my-4">
+            <MudStack Row Spacing="12">
+                <MudText>
+                    The submission was amended by the broker. Please review the changes, make any changes to the NBI if you have to and confirm or retract your feedback.
+                </MudText>
+                <MudButton Variant="Variant.Outlined" Color="Color.Warning" OnClick="ReviewModifications">
+                    <MudText>Review</MudText>                    
+                </MudButton>
+            </MudStack>            
+        </MudAlert>
+    }
+
+    @if (_visibleTab == "terms")
+    {
+        <MudGrid Class="mt-4 mb-8">
+            <MudItem xs="8">
+                <MudCard Outlined Style="background-color:var(--mud-palette-background-grey)">
+                    <MudCardHeader>
+                        <CardHeaderContent>
+                            <MudText Typo="Typo.h6">Deal details</MudText>
+                        </CardHeaderContent>                        
+                    </MudCardHeader>
+                    <MudCardContent>
+                        <MudGrid Class="mt-2">
+                            <MudItem xs="6">
+                                <MudText>Insured and buyer:</MudText>
+                            </MudItem>
+                            <MudItem xs="6">
+                                <MudText>@($"{_deal.Terms.InsuredAndBuyer} (Jusristiction: {_deal.Terms.InsuredAndBuyerJurisdiction.ToString()})")</MudText>
+                            </MudItem>
+                            <MudItem xs="6">
+                                <MudText>Target:</MudText>
+                            </MudItem>
+                            <MudItem xs="6">
+                                <MudText>@($"{_deal.Terms.Target} (Jusristiction: {_deal.Terms.TargetJurisdiction.ToString()})")</MudText>
+                            </MudItem>
+                            <MudItem xs="6">
+                                <MudText>Ultimate beneficial owner:</MudText>
+                            </MudItem>
+                            <MudItem xs="6">
+                                <MudText>@($"{_deal.Terms.UBO} (Jusristiction: {_deal.Terms.UBOJurisdiction.ToString()})")</MudText>
+                            </MudItem>
+                            <MudItem xs="6">
+                                <MudText>Sellers:</MudText>
+                            </MudItem>
+                            <MudItem xs="6">
+                                <MudText>@_deal.Terms.Sellers</MudText>
+                            </MudItem>
+                            <MudItem xs="6">
+                                <MudText>Deal process:</MudText>
+                            </MudItem>
+                            <MudItem xs="6">
+                                <MudText>@_deal.Terms.Process.ToString().Replace('_', ' ')</MudText>
+                            </MudItem>
+                            <MudItem xs="6">
+                                <MudText>Industry:</MudText>
+                            </MudItem>
+                            <MudItem xs="6">
+                                <MudText>@_deal.Terms.Industry</MudText>
+                            </MudItem>
+                            <MudItem xs="6">
+                                <MudText>Target short description:</MudText>
+                            </MudItem>
+                            <MudItem xs="6">
+                                <MudText>@_deal.Terms.TargetShortDescription</MudText>
+                            </MudItem>
+                            <MudItem xs="6">
+                                <MudText>Financial info:</MudText>
+                            </MudItem>
+                            <MudItem xs="6">
+                                <MudText>@_deal.Terms.FinancialInfo</MudText>
+                            </MudItem>
+                            <MudItem xs="6">
+                                <MudText>Geographical footprint:</MudText>
+                            </MudItem>
+                            <MudItem xs="6">
+                                <MudText>@_deal.Terms.GeographicalFoorprint</MudText>
+                            </MudItem>
+                            <MudItem xs="6">
+                                <MudText>Governing law:</MudText>
+                            </MudItem>
+                            <MudItem xs="6">
+                                <MudText>@_deal.Terms.GoverningLaw</MudText>
+                            </MudItem>
+                            <MudItem xs="6">
+                                <MudText>Number of employees:</MudText>
+                            </MudItem>
+                            <MudItem xs="6">
+                                <MudText>@_deal.Terms.EmployeesNumber</MudText>
+                            </MudItem>
+                            <MudItem xs="6">
+                                <MudText>Purchace price mechanism:</MudText>
+                            </MudItem>
+                            <MudItem xs="6">
+                                <MudText>@_deal.Terms.PurchasePriceMechanism.ToString().Replace('_', ' ')</MudText>
+                            </MudItem>
+                            <MudItem xs="6">
+                                <MudText>Insured obligations:</MudText>
+                            </MudItem>
+                            <MudItem xs="6">
+                                <MudText>@_deal.Terms.InsuredObligations</MudText>
+                            </MudItem>
+                            <MudItem xs="6">
+                                <MudText>Policy duration (from closing):</MudText>
+                            </MudItem>
+                            <MudItem xs="6">
+                                <MudText>@_deal.Terms.PolicyDurationInMonthsForBusinessWarranties for business warranties</MudText>
+                                <MudText>@_deal.Terms.PolicyDurationInMonthsForFundamentalWarranties for fundamental warranties</MudText>
+                                <MudText>@_deal.Terms.PolicyDurationInMonthsForTaxIdemnity for (potential tax warranties and) the tax idemnity</MudText>
+                            </MudItem>
+                        </MudGrid>
+                    </MudCardContent>
+                </MudCard>
+            </MudItem>
+            <MudItem xs="4" />@*Grid line filler*@
+            <MudItem xs="8">
+                <MudCard Outlined Style="background-color:var(--mud-palette-background-grey)">
+                    <MudCardHeader>
+                        <CardHeaderContent>
+                            <MudText Typo="Typo.h6">Advisors</MudText>
+                        </CardHeaderContent>                        
+                    </MudCardHeader>
+                    <MudCardContent>
+                        <MudText Typo="Typo.h6">Advisors for the buy side:</MudText>
+                        <MudGrid Class="mt-2 mb-6">
+                            @foreach (var advisor in _deal.Terms.BuySideAdvisors.Where(a => !string.IsNullOrEmpty(a.Name)))
+                            {
+                                <MudItem xs="6">
+                                    <MudText>@advisor.Type :</MudText>
+                                </MudItem>
+                                <MudItem xs="6">
+                                    <MudText>@advisor.Name</MudText>
+                                </MudItem>
+                            }
+                        </MudGrid>
+                        <MudText Typo="Typo.h6">Advisors for the sell side:</MudText>
+                        <MudGrid Class="mt-2">
+                            @foreach (var advisor in _deal.Terms.SellSideAdvisors.Where(a => !string.IsNullOrEmpty(a.Name)))
+                            {
+                                <MudItem xs="6">
+                                    <MudText>@advisor.Type :</MudText>
+                                </MudItem>
+                                <MudItem xs="6">
+                                    <MudText>@advisor.Name</MudText>
+                                </MudItem>
+                            }
+                        </MudGrid>
+                    </MudCardContent>
+                </MudCard>
+            </MudItem>
+            <MudItem xs="4" />@*Grid line filler*@
+            <MudItem xs="8">
+                <MudCard Outlined Style="background-color:var(--mud-palette-background-grey)">
+                    <MudCardHeader>
+                        <CardHeaderContent>
+                            <MudText Typo="Typo.h6">Timing</MudText>
+                        </CardHeaderContent>                        
+                    </MudCardHeader>
+                    <MudCardContent>
+                        <MudText Typo="Typo.h6">Transaction timing and structure:</MudText>
+                        <MudGrid Class="mt-2 mb-6">                            
+                            <MudItem xs="6">
+                                <MudText>NBI - deadline:</MudText>
+                            </MudItem>
+                            <MudItem xs="6">
+                                <MudText>@_deal.SubmissionDeadline.Value.ToLocalTime().ToString("g")</MudText>
+                            </MudItem>
+                            <MudItem xs="6">
+                                <MudText>Indicative - final bid planned for:</MudText>
+                            </MudItem>
+                            <MudItem xs="6">
+                                <MudText>@_deal.Terms.BidDate.Value.ToLocalTime().ToString("d")</MudText>
+                            </MudItem>
+                            <MudItem xs="6">
+                                <MudText>Signing planned for:</MudText>
+                            </MudItem>
+                            <MudItem xs="6">
+                                <MudText>@_deal.Terms.SigningDate.Value.ToLocalTime().ToString("d")</MudText>
+                            </MudItem>
+                            <MudItem xs="6">
+                                <MudText>Final policy planned for:</MudText>
+                            </MudItem>
+                            <MudItem xs="6">
+                                <MudText>@_deal.Terms.FinalPolicyDate.Value.ToLocalTime().ToString("d")</MudText>
+                            </MudItem>
+                        </MudGrid>                        
+                    </MudCardContent>
+                </MudCard>
+            </MudItem>
+            <MudItem xs="4" />@*Grid line filler*@
+            <MudItem xs="8">
+                <MudCard Outlined Style="background-color:var(--mud-palette-background-grey)">
+                    <MudCardHeader>
+                        <CardHeaderContent>
+                            <MudText Typo="Typo.h6">Transaction documents</MudText>
+                        </CardHeaderContent>                        
+                    </MudCardHeader>
+                    <MudCardContent>
+                        <MudGrid Class="mt-2 mb-6">                            
+                            <MudTable 
+                                Items="@_deal.Files" 
+                                Hover 
+                                Breakpoint="Breakpoint.Sm" 
+                                Elevation="0"
+                                Dense
+                                GroupBy="@_filesTableGroupDefinition"
+                                GroupFooterClass="mb-4"
+                                Class="ml-4"
+                                Style="background-color:var(--mud-palette-background-grey)" >
+                                <HeaderContent>
+                                    <MudTh>Name</MudTh>
+                                    <MudTh>Type</MudTh>
+                                    <MudTh>Last Update</MudTh>
+                                    <MudTh>Actions</MudTh>
+                                </HeaderContent>
+                                 <GroupHeaderTemplate>
+                                    <MudTh Style="background-color:var(--mud-palette-background-grey); font-weight: 600; line-height: 0.2;" colspan="4">
+                                        @context.Key
+                                    </MudTh>
+                                </GroupHeaderTemplate>
+                                <RowTemplate>
+                                    <MudTd DataLabel="Name">@context.FileName</MudTd>
+                                    <MudTd DataLabel="Type">@context.Type.ToString()</MudTd>
+                                    <MudTd DataLabel="LastModified">@(context.LastModified.ToLocalTime().ToString("g") + " " + Thread.CurrentThread.CurrentCulture.Name)</MudTd>
+                                    <MudTd DataLabel="Actions">
+                                        <MudTooltip Delay="1000" Duration="1000" Text="Download">
+                                            <MudIconButton Icon="@Icons.Outlined.Download" aria-label="Download" OnClick="() => DownloadFile(context)" />
+                                        </MudTooltip>                                        
+                                    </MudTd>
+                                </RowTemplate>
+                            </MudTable>               
+                        </MudGrid>                        
+                    </MudCardContent>
+                </MudCard>
+            </MudItem>
+            <MudItem xs="4" />@*Grid line filler*@
+            <MudItem xs="8">
+                <MudCard Outlined Style="background-color:var(--mud-palette-background-grey)">
+                    <MudCardHeader>
+                        <CardHeaderContent>
+                            <MudText Typo="Typo.h6">Notes</MudText>
+                        </CardHeaderContent>                        
+                    </MudCardHeader>
+                    <MudCardContent>
+                        <p style="white-space: pre-line" >
+                            @_deal.Terms.Notes
+                        </p>                        
+                    </MudCardContent>
+                </MudCard>
+            </MudItem>
+            <MudItem xs="4" />@*Grid line filler*@
+        </MudGrid>
+    }
+    else if (_visibleTab == "pricing")
+    {
+        <MudText Typo="Typo.body1" Class="mt-6">Provide the pricing for this deal. All values are in @_feedback.Pricing.EnterpriseValue.Currency.ToString()</MudText>
+        <MudGrid Class="mt-4 mb-8">
+            <MudItem xs="3">
+                <MudCard Elevation="4" Style="height: 168px">
+                    <MudCardHeader Class="my-1 py-1">
+                        <CardHeaderContent>
+                            <MudText Typo="Typo.body1" Style="font-weight: 600">Enterprise Value</MudText>
+                        </CardHeaderContent>  
+                        <CardHeaderActions>                            
+                            <MudIconButton Icon="@Icons.Outlined.Edit" Class="invisible" />@*Adding to align card height with the other cards that have actions*@
+                        </CardHeaderActions>
+                    </MudCardHeader>
+                    <MudCardContent Class="my-1 py-1">                        
+                        <MudStack Row AlignItems="AlignItems.End">
+                            <MudText Typo="Typo.h4">@_feedback.Pricing.EnterpriseValue.ToAmountString("N0")</MudText>
+                            <MudText Typo="Typo.body1">@_feedback.Pricing.EnterpriseValue.Currency.ToString()</MudText>
+                        </MudStack>
+                    </MudCardContent>
+                </MudCard>
+            </MudItem>
+            <MudItem xs="3">
+                <MudCard Elevation="4" Style="height: 168px">
+                    <MudCardHeader Class="my-1 py-1">
+                        <CardHeaderContent>
+                            <MudText Typo="Typo.body1" Style="font-weight: 600">De Miminis</MudText>
+                        </CardHeaderContent>
+                        <CardHeaderActions>                            
+                            <MudIconButton Icon="@Icons.Outlined.Edit" Color="Color.Default" OnClick="@(() => EditPricingValue("De Minimis", _feedback.Pricing.DeMinimis))" />                        
+                        </CardHeaderActions>
+                    </MudCardHeader>
+                    <MudCardContent Class="my-1 py-1">
+                        <MudStack Row AlignItems="AlignItems.End">
+                            <MudText Typo="Typo.h4">@_feedback.Pricing.DeMinimis.ToAmountString("N0")</MudText>
+                            <MudText Typo="Typo.body1" Color="Color.Default">@_feedback.Pricing.DeMinimis.Currency.ToString()</MudText>
+                        </MudStack>
+                    </MudCardContent>
+                </MudCard>
+            </MudItem>            
+            <MudItem xs="3">
+                <MudCard Elevation="4" Style="height: 168px">
+                    <MudCardHeader Class="my-1 py-1">
+                        <CardHeaderContent>
+                            <MudText Typo="Typo.body1" Style="font-weight: 600">UW fee</MudText>
+                        </CardHeaderContent>   
+                        <CardHeaderActions>
+                            <MudIconButton Icon="@Icons.Outlined.Edit" Color="Color.Default" OnClick="@(() => EditPricingValue("UW fee", _feedback.Pricing.UwFee))" />
+                        </CardHeaderActions>
+                    </MudCardHeader>
+                    <MudCardContent Class="my-1 py-1">
+                        <MudStack Row AlignItems="AlignItems.End">
+                            <MudText Typo="Typo.h4">@_feedback.Pricing.UwFee.ToAmountString("N0")</MudText>
+                            <MudText Typo="Typo.body2" Color="Color.Default">@_feedback.Pricing.UwFee.Currency.ToString()</MudText>
+                        </MudStack>
+                        <MudStack Row AlignItems="AlignItems.Center" Justify="Justify.FlexStart" Spacing="0" Class="mt-4">
+                            <MudTooltip Text="Waived if deal is bound?">
+                                <MudSwitch 
+                                    Checked="_feedback.Pricing.UwFeeWaiveOption" 
+                                    CheckedChanged="@((bool val) => _feedback = _feedback with { Pricing = _feedback.Pricing.SetWaive("UW fee", val) })"
+                                    Label="Waived?" 
+                                    Color="Color.Primary" />                                      
+                            </MudTooltip>                                                        
+                        </MudStack>
+                    </MudCardContent>
+                </MudCard>
+            </MudItem>
+            <MudItem xs="3">
+                <MudCard Elevation="4" Style="height: 168px">
+                    <MudCardHeader Class="my-1 py-1">
+                        <CardHeaderContent>
+                            <MudText Typo="Typo.body1" Style="font-weight: 600">Break fee</MudText>
+                        </CardHeaderContent>    
+                        <CardHeaderActions>
+                            <MudIconButton Icon="@Icons.Outlined.Edit" Color="Color.Default" OnClick="@(() => EditPricingValue("Break fee", _feedback.Pricing.BreakFee))" />
+                        </CardHeaderActions>
+                    </MudCardHeader>
+                    <MudCardContent Class="my-1 py-1">
+                        <MudStack Row AlignItems="AlignItems.End">
+                            <MudText Typo="Typo.h4">@_feedback.Pricing.BreakFee.ToAmountString("N0")</MudText>
+                            <MudText Typo="Typo.body2" Color="Color.Default">@_feedback.Pricing.BreakFee.Currency.ToString()</MudText>
+                        </MudStack>
+                        <MudStack Row AlignItems="AlignItems.Center" Justify="Justify.FlexStart" Spacing="0" Class="mt-4">
+                            <MudTooltip Text="Waived if exclusivity is granted?">
+                                <MudSwitch 
+                                    Checked="_feedback.Pricing.BreakFeeWaiveOption"
+                                    CheckedChanged="@((bool val) => _feedback = _feedback with { Pricing = _feedback.Pricing.SetWaive("Break fee", val) })"
+                                    Label="Waived?" 
+                                    Color="Color.Primary" />
+                            </MudTooltip>
+                        </MudStack>                        
+                    </MudCardContent>
+                </MudCard>
+            </MudItem>  
+            <MudItem xs="12">
+                <MudText Typo="Typo.h5" Style="font-weight: 600" Class="mt-6">Standalone</MudText>
+            </MudItem>
+            <MudItem xs="12">
+                <MudCard Elevation="0">
+                    <MudCardContent>
+                        <MudStack Row>
+                            <MudPaper Elevation="0" Class="d-flex mr-4" MinWidth="120px">
+                                <MudText Typo="Typo.subtitle1" Class="align-self-end">Limit of Liability</MudText>                                
+                            </MudPaper>
+                            <MudGrid>                        
+                                <MudItem xs="2" Class="d-flex">
+                                    <MudText Typo="Typo.subtitle1" Class="align-self-end">Retention<br/>(% of EV)</MudText>
+                                </MudItem>
+                                <MudItem xs="4" Class="d-flex">
+                                    <MudText Typo="Typo.subtitle1" Class="align-self-end">Premium</MudText>
+                                </MudItem>
+                                <MudItem xs="2" Class="d-flex">
+                                    <MudText Typo="Typo.subtitle1" Class="align-self-end">RoL</MudText>
+                                </MudItem>
+                                <MudItem xs="2" Class="d-flex">
+                                    <MudText Typo="Typo.subtitle1" Class="align-self-end">Enhancements</MudText>
+                                </MudItem>
+                                <MudItem xs="2" Class="d-flex">
+                                    <MudText Typo="Typo.subtitle1" Class="align-self-end">Total</MudText>
+                                </MudItem>
+                            </MudGrid>
+                        </MudStack>
+                    </MudCardContent>
+                </MudCard>
+            </MudItem>
+            @foreach (var limit in _feedback.Pricing.Limits)            
+            {
+                <MudItem xs="12">
+                    <MudCard Elevation="2">
+                        <MudCardContent>
+                            <MudStack Row AlignItems="AlignItems.Center">
+                                <MudPaper Elevation="0" Class="mr-6" MinWidth="120px">
+                                    <MudText Typo="Typo.h2" Color="Color.Primary">@limit.ToString()%</MudText>
+                                    <MudText Typo="Typo.body1" Color="Color.Primary" Class="mt-4">@limit.ToAmount(_feedback.Pricing.EnterpriseValue).ToString("N0")</MudText>
+                                </MudPaper>
+                                <div>                                
+                                    <MudGrid>
+                                        @foreach (var option in _feedback.Pricing.OptionsOfLimit(limit.Id))
+                                        {
+                                            <MudItem xs="2" Class="d-flex">
+                                                <MudText Typo="Typo.h6" Class="align-self-center">@option.Retention.ToString()</MudText>
+                                            </MudItem>
+                                            <MudItem xs="4">
+                                                <MudNumericField 
+                                                        Value="option.Premium.Amount"
+                                                        ValueChanged="@((decimal newPremium) => _feedback = _feedback with { Pricing = _feedback.Pricing.SetPremium(option, newPremium) })"
+                                                        Margin="Margin.Dense"
+                                                        T="decimal"
+                                                        Variant="Variant.Outlined"
+                                                        Format="0.##"
+                                                        Min="0"
+                                                        HideSpinButtons
+                                                        Clearable />
+                                            </MudItem>
+                                            <MudItem xs="2" Class="d-flex">
+                                                <MudText Typo="Typo.h6" Class="align-self-center">@PricingCalc.RoLString(_feedback.Pricing.EnterpriseValue, option.Premium, limit)</MudText>
+                                            </MudItem>
+                                            <MudItem xs="2" Class="d-flex">
+                                                <MudText Typo="Typo.h6" Class="align-self-center">@PricingCalc.EnhancementValueString(option.Premium, _feedback.Enhancements)</MudText>
+                                            </MudItem>
+                                            <MudItem xs="2" Class="d-flex">
+                                                <MudText Typo="Typo.h6" Class="align-self-center" Style="font-weight: 600">@PricingCalc.TotalString(option.Premium, _feedback.Enhancements, _feedback.Pricing.UwFee)</MudText>
+                                            </MudItem>          
+                                        }                                        
+                                    </MudGrid>
+                                </div>
+                                </MudStack>
+                            </MudCardContent>
+                    </MudCard>
+                </MudItem>
+            }
+            
+        </MudGrid>
+    }
+    else if (_visibleTab == "enhancements")
+    {
+        <MudGrid Class="mt-4">
+            @foreach (var limit in _feedback.Pricing.Limits)
+            {
+                <MudItem xs="3">
+                    <PricingMiniView Options="@_feedback.Pricing.OptionsOfLimit(limit.Id)" Enhancements="@_feedback.Enhancements" UwFee="_feedback.Pricing.UwFee" />
+                </MudItem>
+            }        
+        </MudGrid>
+        <MudTabs Elevation="0" Class="mt-4 mb-8">
+            <MudTabPanel Text="Requests">
+                <TabContent>
+                    <MudText Typo="Typo.body2">Requests</MudText>
+                </TabContent>
+                <ChildContent>
+                    <MudText Typo="Typo.body1" Class="mt-6">What is your position regarding these requests?</MudText>                    
+                    <MudGrid Class="mt-6">
+                        <MudItem xs="8">
+                            <MudStack Row AlignItems="AlignItems.Baseline" Justify="Justify.FlexEnd">
+                                <MudSwitch CheckedChanged="(bool val) => ToggleAllEnhancements(val)" Label="Select all" Color="Color.Primary" UnCheckedColor="Color.Default" />                                
+                            </MudStack>
+                        </MudItem>
+                        <MudItem xs="4" />@*Grid line filler*@
+                        <MudItem xs="8">
+                            <MudExpansionPanels>
+                                @foreach (var enhancement in _feedback.Enhancements.Where(e => e.Type == EnhancementType.Request))
+                                {
+                                    <MudExpansionPanel>
+                                        <TitleContent>
+                                            <MudStack Row AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
+                                                <MudText Typo="Typo.h6">@enhancement.Title</MudText>
+                                                <div @onclick:stopPropagation class="d-flex align-center gap-4">
+                                                    <MudText Color="@(enhancement.HasAP ? Color.Primary : Color.Default)">AP(%)</MudText>
+                                                    <MudNumericField 
+                                                        HideSpinButtons 
+                                                        Value="@(enhancement.AP*100)" 
+                                                        ValueChanged="@(newAP => ChangeEnhancementAP(enhancement, newAP))" 
+                                                        T="double"
+                                                        Variant="Variant.Outlined"
+                                                        Style="width: 60px"
+                                                        Min="0" 
+                                                        Max="100" />
+                                                    <MudIcon Icon="@Icons.Outlined.Comment" Color="@(enhancement.HasComment ? Color.Primary : Color.Default)" />
+                                                    <MudSwitch Checked="enhancement.InsurerOffersIt" CheckedChanged="(bool val) => ToggleSingleEnhancement(enhancement, val)" Color="Color.Primary" UnCheckedColor="Color.Default" />
+                                                </div>
+                                            </MudStack>
+                                        </TitleContent>
+                                        <ChildContent>
+                                            <div class="d-flex flex-row gap-4">
+                                                <div style="flex: 1">
+                                                    <b>Description</b><br>
+                                                    @enhancement.Description
+                                                </div>
+                                                <MudTextField
+                                                        Value="@enhancement.Comment" 
+                                                        Label="Comment"
+                                                        ValueChanged="@(newComment => ChangeEnhancementComment(enhancement, newComment))" 
+                                                        T="string"
+                                                        Variant="Variant.Outlined"
+                                                        Lines="10" 
+                                                        Validation="@(new Func<string, IEnumerable<string>>(ValidateMaxEnhancementCommentCharacters))"
+                                                        Counter="1000" 
+                                                        Immediate
+                                                        Style="flex: 1"/>
+                                            </div>
+                                        </ChildContent>
+                                    </MudExpansionPanel>
+                                }
+                            </MudExpansionPanels>
+                        </MudItem>
+                        <MudItem xs="4" />@*Grid line filler*@
+                    </MudGrid>
+                </ChildContent>
+            </MudTabPanel>
+            <MudTabPanel Text="Assumptions">
+                <TabContent>
+                    <MudText Typo="Typo.body2">Assumptions</MudText>
+                </TabContent>
+                <ChildContent>
+                    <MudText Typo="Typo.body1" Class="mt-6">Do you have any assymptions? Let the insurers know which ones.</MudText>
+                    <MudText Typo="Typo.body2">You can add more but to edit the default ones go to your <MudLink Href="/settings" Typo="Typo.body2">account settings</MudLink>.</MudText>
+                    <MudGrid Class="mt-6">
+                        <MudItem xs="8">
+                            <MudStack Row AlignItems="AlignItems.Baseline" Justify="Justify.FlexEnd">
+                                <MudSwitch CheckedChanged="(bool val) => ToggleAllEnhancements(val)" Label="Select all" Color="Color.Primary" UnCheckedColor="Color.Default" />                                
+                            </MudStack>
+                        </MudItem>
+                        <MudItem xs="4" />@*Grid line filler*@
+                        <MudItem xs="8">
+                            <MudExpansionPanels>
+                                @foreach (var enhancement in _feedback.Enhancements.Where(e => e.Type == EnhancementType.Assumption))
+                                {
+                                    <MudExpansionPanel>
+                                        <TitleContent>
+                                            <MudStack Row AlignItems="AlignItems.Baseline" Justify="Justify.SpaceBetween">
+                                                <MudText>@enhancement.Title</MudText>
+                                                <div @onclick:stopPropagation>
+                                                    <MudSwitch Checked="enhancement.InsurerOffersIt" CheckedChanged="(bool val) => ToggleSingleEnhancement(enhancement, val)" Color="Color.Primary" UnCheckedColor="Color.Default" />
+                                                </div>
+                                            </MudStack>
+                                        </TitleContent>
+                                        <ChildContent>
+                                            <div class="d-flex flex-row gap-4">
+                                                <div style="flex: 1">
+                                                    <b>Description</b><br>
+                                                    @enhancement.Description
+                                                </div>
+                                                <MudTextField
+                                                        Value="@enhancement.Comment" 
+                                                        Label="Comment"
+                                                        ValueChanged="@(newComment => ChangeEnhancementComment(enhancement, newComment))" 
+                                                        T="string"
+                                                        Variant="Variant.Outlined"
+                                                        Lines="10" 
+                                                        Validation="@(new Func<string, IEnumerable<string>>(ValidateMaxEnhancementCommentCharacters))"
+                                                        Counter="1000" 
+                                                        Immediate
+                                                        Style="flex: 1"/>
+                                            </div>
+                                        </ChildContent>
+                                    </MudExpansionPanel>
+                                }
+                            </MudExpansionPanels>
+                        </MudItem>
+                        <MudItem xs="4" />@*Grid line filler*@
+                    </MudGrid>
+                </ChildContent>
+            </MudTabPanel>
+        </MudTabs>
+    }
+    else if (_visibleTab == "warranties")
+    {
+        <MudText Typo="Typo.body1" Class="mt-6">Please provide your cover positions and comments.</MudText>
+        @if (_deal.SPA != null)
+        {
+            <MudStack Row AlignItems="AlignItems.Center" Class="mt-4">
+                <MudIcon Icon="@Icons.Outlined.Info" Color="Color.Primary" />
+                <MudText Typo="Typo.body1">You are viewing the warrenties associated to file: @_deal.SPA.FileName @_deal.SPA.LastModified.ToLocalTime().ToString("g") </MudText>
+                <MudTooltip Delay="1000" Duration="1000" Text="Download">
+                    <MudIconButton Icon="@Icons.Outlined.Download" Variant="Variant.Filled" Size="Size.Small" aria-label="Download" OnClick="() => DownloadFile(_deal.SPA)" />
+                </MudTooltip>    
+            </MudStack>        
+        }        
+        <MudTable Items="_warranties" T="WarrantyDTO" Hover Striped Class="mt-6 mb-8">
+            <HeaderContent>
+                <MudTh></MudTh>
+                <MudTh>Coverage position</MudTh>
+                <MudTh>Knowledge scrape</MudTh>
+                <MudTh>Comment</MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd DataLabel="Description">@context.Description</MudTd>
+                <MudTd DataLabel="Coverage position">                    
+                    <MudRadioGroup T="int" @bind-SelectedOption="@context.CoveragePosition">
+                        <MudRadio Option="(int)CoveragePosition.Yes" UnCheckedColor="Color.Primary" Color="Color.Success" Placement="Placement.Top">@CoveragePosition.Yes.ToString()</MudRadio>
+                        <MudRadio Option="(int)CoveragePosition.No" UnCheckedColor="Color.Primary" Color="Color.Error" Placement="Placement.Top">@CoveragePosition.No.ToString()</MudRadio>
+                        <MudRadio Option="(int)CoveragePosition.Partial" UnCheckedColor="Color.Primary" Color="Color.Warning" Placement="Placement.Top">@CoveragePosition.Partial.ToString()</MudRadio>
+                        <MudRadio Option="(int)CoveragePosition.TBC" UnCheckedColor="Color.Primary" Color="Color.Default" Placement="Placement.Top">@CoveragePosition.TBC.ToString()</MudRadio>
+                    </MudRadioGroup>
+                </MudTd>
+                <MudTd DataLabel="Knowledge scrape">
+                    <MudRadioGroup T="int" @bind-SelectedOption="@context.KnowledgeScrape">
+                        <MudRadio Option="(int)KnowledgeScrape.Yes"  UnCheckedColor="Color.Primary" Color="Color.Success" Placement="Placement.Top">@KnowledgeScrape.Yes.ToString()</MudRadio>
+                        <MudRadio Option="(int)KnowledgeScrape.No"  UnCheckedColor="Color.Primary" Color="Color.Error" Placement="Placement.Top">@KnowledgeScrape.No.ToString()</MudRadio>
+                        <MudRadio Option="(int)KnowledgeScrape.Partial"  UnCheckedColor="Color.Primary" Color="Color.Warning" Placement="Placement.Top">@KnowledgeScrape.Partial.ToString()</MudRadio>
+                    </MudRadioGroup>
+                </MudTd>
+                <MudTd DataLabel="Comment">
+                    <MudIconButton 
+                        Icon="@Icons.Outlined.Comment" 
+                        Color="@(@context.HasComment ? Color.Primary : Color.Default)" 
+                        OnClick="@(() => OpenEditWarrantyCommentDialog(@context))"/>
+                </MudTd>
+            </RowTemplate>
+        </MudTable>
+    }
+    else if (_visibleTab == "exclusions")
+    {
+        <MudTabs Elevation="0" Class="mt-4 mb-8">
+            <MudTabPanel Text="Exclusions">
+                <TabContent>
+                    <MudText Typo="Typo.body2">Exclusions</MudText>
+                </TabContent>
+                <ChildContent>
+                    <MudGrid Class="mt-6">
+                        <MudItem xs="8">
+                            <MudText Typo="Typo.body1" Class="mt-6">Any countries excluded?</MudText>
+                        </MudItem>
+                        <MudItem xs="4" />@*Grid line filler*@
+                        <MudItem xs="8">
+                            <MudSelect T="string"
+                                   Variant="Variant.Outlined"
+                                   MultiSelection
+                                   @bind-SelectedValues="_selectedExcludedCountries">
+                                    @foreach (var country in Utils.Countries)
+                                    {
+                                        <MudSelectItem T="string" Value="@country">@country</MudSelectItem>
+                                    }
+                            </MudSelect>
+                        </MudItem>
+                        <MudItem xs="4" />@*Grid line filler*@
+                        <MudItem xs="8">
+                            <MudText Typo="Typo.body1" Class="mt-6">Select any exclusions you require.</MudText>
+                        </MudItem>
+                        <MudItem xs="4" />@*Grid line filler*@
+                        <MudItem xs="8">
+                            <MudStack Row AlignItems="AlignItems.Baseline" Justify="Justify.FlexEnd">
+                                <MudSwitch CheckedChanged="(bool val) => ToggleAllExclusions(val)" Label="Select all" Color="Color.Primary" UnCheckedColor="Color.Default" />                                
+                            </MudStack>
+                        </MudItem>
+                        <MudItem xs="4" />@*Grid line filler*@
+                        <MudItem xs="8">
+                            <MudExpansionPanels>
+                                @foreach (var exclusion in _feedback.Exclusions)
+                                {
+                                    <MudExpansionPanel>
+                                        <TitleContent>
+                                            <MudStack Row AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
+                                                <MudText Typo="Typo.h6">@exclusion.Title</MudText>
+                                                <div @onclick:stopPropagation class="d-flex align-center gap-4">
+                                                    <MudIcon Icon="@Icons.Outlined.Comment" Color="@(exclusion.HasComment ? Color.Primary : Color.Default)" />
+                                                    <MudSwitch Checked="exclusion.InsurerRequiresIt" CheckedChanged="(bool val) => ToggleSingleExclusion(exclusion, val)" Color="Color.Primary" UnCheckedColor="Color.Default" />
+                                                </div>
+                                            </MudStack>
+                                        </TitleContent>
+                                        <ChildContent>
+                                            <div class="d-flex flex-row gap-4">
+                                                <div style="flex: 1">
+                                                    @if (!string.IsNullOrEmpty(exclusion.Description))
+                                                    {
+                                                        <b>Description</b><br>
+                                                        @exclusion.Description
+                                                    }                                                    
+                                                </div>
+                                                <MudTextField
+                                                        Value="@exclusion.Comment" 
+                                                        Label="Comment"
+                                                        ValueChanged="@(newComment => ChangeExclusionComment(exclusion, newComment))" 
+                                                        T="string"
+                                                        Variant="Variant.Outlined"
+                                                        Lines="10" 
+                                                        Validation="@(new Func<string, IEnumerable<string>>(ValidateMaxExclusionCommentCharacters))"
+                                                        Counter="1000" 
+                                                        Immediate
+                                                        Style="flex: 1"/>
+                                            </div>
+                                        </ChildContent>
+                                    </MudExpansionPanel>
+                                }
+                            </MudExpansionPanels>
+                        </MudItem>
+                        <MudItem xs="4" />@*Grid line filler*@
+                    </MudGrid>
+                </ChildContent>
+            </MudTabPanel>
+            <MudTabPanel Text="UW focus">
+                <TabContent>
+                    <MudText Typo="Typo.body2">UW focus</MudText>
+                </TabContent>
+                <ChildContent>
+                    <MudText Typo="Typo.body1" Class="mt-6">What is your underwriting focus?</MudText>                    
+                    <MudGrid Class="mt-6">                        
+                        <MudItem xs="8">
+                            <MudSelect T="string"
+                                   Variant="Variant.Outlined"
+                                   SelectAll
+                                   MultiSelection
+                                   @bind-SelectedValues="_selectedUwFocus">                                
+                                    @foreach (var uwFocusOption in uwFocusOptions)
+                                    {
+                                        <MudSelectItem T="string" Value="@uwFocusOption">@uwFocusOption</MudSelectItem>
+                                    }
+                            </MudSelect>
+                        </MudItem>
+                        <MudItem xs="4" />@*Grid line filler*@
+                    </MudGrid>
+                </ChildContent>
+            </MudTabPanel>
+        </MudTabs>
+    }
+
+    <MudFab Color="Color.Primary"
+        StartIcon="@Icons.Outlined.EditNote"
+        OnClick="OpenEditNotesDialog"
+        Label="Notes"
+        Size="Size.Small"
+        Style="position: fixed; bottom: 110px; right:40px" />
+
+    <MudFab Color="Color.Primary"
+        StartIcon="@Icons.Outlined.Save"
+        OnClick="SaveFeedback"
+        Label="@(_saving ? "Saving..." : "Save")"
+        Disabled="@(!IsFeedbackChanged() || _saving || _loading)"
+        Style="position: fixed; bottom: 40px; right:40px" />
+}
+
+
+@code {
+    [Parameter] public Guid DealId { get; set; }
+
+    private DealSubmissionDTO _deal = DealSubmissionDTO.Factory.Empty;
+    private SubmissionFeedbackDTO _feedback = SubmissionFeedbackDTO.Factory.Empty;
+    private string _visibleTab = "terms";
+    private TableGroupDefinition<FileDTO> _filesTableGroupDefinition = new()
+        {
+            GroupName = "GroupFilesOfDealByType",
+            Indentation = false,
+            Expandable = false,
+            Selector = (d) => d.Type
+        };    
+    private string[] uwFocusOptions = { "Compliance", "Permits", "Regulatory", "Employment / EHS", "Environmental", "Foreign operations",
+        "Cyber", "IT / IP", "Data Protection", "Material Agreements ", "Condition of assets", "Tax and financials " };
+
+    //tracking of changes
+    private CompareLogic _compareLogic = new CompareLogic();
+    private SubmissionFeedbackDTO? _currentlySavedFeedback = SubmissionFeedbackDTO.Factory.Empty;
+
+
+    //data copies for the UI bc the DTOs wehn init-props do not help
+    private List<WarrantyDTO> _warranties = new();
+    private IEnumerable<string> _selectedUwFocus = new HashSet<string>();
+    private IEnumerable<string> _selectedExcludedCountries = new HashSet<string>();
+
+    //page statuses
+    private bool _hasError = false;
+    private bool _saving = false;
+    private bool _downloading = false;
+    private bool _loading => (_deal == null || _deal.Id == Guid.Empty) && !_hasError;
+
+    private Color GetButtonColor(string button) => _visibleTab == button ? Color.Primary : Color.Default;
+    private string GetButtonBackGroundColor(string button) => _visibleTab == button ? "background-color: var(--mud-palette-primary-hover)" : "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        (await Http
+            .GetFromApiAsync<DealSubmissionDTO>(
+                path: $"api/v1/deals/{DealId}",
+                Snackbar
+            ))
+            .Match(
+                some: deal => _deal = deal,
+                none: () => _hasError = true
+            );
+
+        (await Http
+            .GetFromApiAsync<SubmissionFeedbackDTO>(
+                path: $"api/v1/deals/{DealId}/feedback",
+                Snackbar
+            ))
+            .Match(
+                some: feedback =>
+                {
+                    _feedback = feedback;
+                    _currentlySavedFeedback = _feedback.DeepClone();
+
+                    _warranties = _feedback.Warranties.OrderBy(w => w.Order).Select(WarrantyDTO.Parse).ToList();
+                    _selectedUwFocus = _feedback.UwFocus.ToHashSet();
+                    _selectedExcludedCountries = _feedback.ExcludedCountries.ToHashSet();
+                },
+                none: () => _hasError = true
+            );
+
+        if (!_feedback.NdaAccepted) ShowNdaDialog();
+    }    
+
+    private void ShowNdaDialog()
+    {
+        var parameters = new DialogParameters 
+        { 
+            ["DealId"] = _deal.Id, 
+            ["FeedbackId"] = _feedback.Id, 
+            ["InsuranceCompanyId"] = _feedback.InsuranceCompanyId, 
+            ["OnBehalfOf"] = _feedback.InsuranceCompanyName, 
+            ["File"] = _deal.NDA 
+        };
+        var options = new MudFormDialogControls().DefaultDialogOptions;
+
+        var dialog = DialogService.Show<AcceptDocumentToContinue>("Accept NDA", parameters, options);
+    }
+
+    private void ReviewModifications()
+    {
+        var parameters = new DialogParameters { ["Modifications"] = _deal.Modifications };
+        var options = new MudFormDialogControls().DefaultDialogOptions;
+
+        var dialog = DialogService.Show<ReviewModificationsDialog>("Review Modifications", parameters, options);
+    }
+
+    private async Task SaveFeedback()
+    {
+        if (!IsFeedbackChanged()) return;
+
+        _saving = true;
+
+        _feedback = _feedback with 
+        { 
+            Warranties = _warranties.Select(WarrantyDTO.Parse).ToImmutable(),
+            UwFocus = _selectedUwFocus.ToImmutable(),
+            ExcludedCountries = _selectedExcludedCountries.ToImmutable()
+        };
+
+        (await Http
+            .PutToApiAsync(
+                path: "api/v1/deals/feedback",
+                _feedback,
+                Snackbar
+            ))
+            .MatchSome(_ => 
+                {
+                    _currentlySavedFeedback = _feedback.DeepClone();
+                    Snackbar.Add("Feedback saved!", Severity.Success);
+                });
+
+        _saving = false;
+    }
+
+    private bool IsFeedbackChanged()
+    {
+        _feedback = _feedback with
+        {
+            Warranties = _warranties.Select(WarrantyDTO.Parse).ToImmutable(),
+            UwFocus = _selectedUwFocus.ToImmutable(),
+            ExcludedCountries = _selectedExcludedCountries.ToImmutable()
+        };
+
+        return !_compareLogic.Compare(_feedback, _currentlySavedFeedback).AreEqual;
+    }
+
+    private void OpenDeclineDialog()
+    {
+        var parameters = new DialogParameters { ["DealId"] = _deal.Id };
+        var options = new MudFormDialogControls().DefaultDialogOptions;
+
+        var dialog = DialogService.Show<DeclineDealDialog>("Decline the deal", parameters, options);        
+    }
+
+    private async Task OpenSubmitFeedbackDialog()
+    {
+        await SaveFeedback();
+
+        var parameters = new DialogParameters { ["Feedback"] = _feedback, ["EnterpriseValue"] = _feedback.Pricing.EnterpriseValue };
+        var options = new MudFormDialogControls().DefaultDialogOptions;
+
+        var dialog = DialogService.Show<SubmitFeedbackDialog>("Submit feedback", parameters, options);  
+    }
+
+    private async Task OpenAssignDialog()
+    {
+        var parameters = new DialogParameters { ["DealId"] = _deal.Id, ["Assignees"] = ImmutableList.CreateRange(_deal.Assignees) };
+        var options = new MudFormDialogControls().DefaultDialogOptions;
+
+        var dialog = DialogService.Show<EditAssigneesDialog>("Assign people to the deal", parameters, options);
+        var result = await dialog.Result;
+
+        if (!result.Cancelled)
+        {
+            _deal = _deal with { Assignees = ((IEnumerable<EmployeeDTO>)result.Data).ToImmutable() };
+        }
+    }
+
+    private async Task DownloadFeedback()
+    {
+        _downloading = true;
+
+        (await Http
+            .PostToApiAsync<SubmissionFeedbackDTO>(
+                path: "api/v1/docgen/nbi",
+                _feedback,
+                Snackbar
+            ))
+            .MatchSome(async response => 
+                await DealFiles.DownloadFileAsync(
+                    await response.Content.ReadAsByteArrayAsync(), 
+                    $"NBI - {_feedback.Name} - {DateTime.Now.ToLocalTime().ToString("yyyy-MM-dd HH_mm_ss")}.zip"
+                )
+            );
+
+        _downloading = false;
+    }
+
+    private async Task OpenEditNotesDialog()
+    {
+        var parameters = new DialogParameters { ["Type"] = "Notes", ["Value"] = _feedback.Notes };
+        var options = new MudFormDialogControls().DefaultDialogOptions;
+
+        var dialog = DialogService.Show<EditNotesDialog>("Edit the notes of the feedback", parameters, options);
+        var result = await dialog.Result;
+
+        if (!result.Cancelled)
+        {
+            _feedback = _feedback with { Notes = (string)result.Data };
+        }
+    }
+
+    #region terms
+    private async Task DownloadFile(FileDTO file) => await DealFiles.DownloadFileAsync(_deal.Id, file);    
+    #endregion
+
+    #region pricing
+    private async Task EditPricingValue(string name, Money value)
+    {
+        var parameters = new DialogParameters { ["Name"] = name, ["Value"] = value.Amount == 0 ? null : value.Amount };
+        var options = new MudFormDialogControls().DefaultDialogOptions;
+
+        var dialog = DialogService.Show<EditFeedbackPricingValueDialog>("Edit feedback pricing value", parameters, options);
+        var result = await dialog.Result;
+
+        if (!result.Cancelled)
+        {
+            _feedback = _feedback with { Pricing = _feedback.Pricing.SetFee(name, (decimal)result.Data) };
+        }
+    }
+    #endregion
+
+    #region enhancements
+    private void ToggleAllEnhancements(bool value) => 
+        _feedback = _feedback with { Enhancements = _feedback.Enhancements.Select(e => e.SetInsurerSelected(value)).ToImmutable() };
+
+    private void ToggleSingleEnhancement(Enhancement enhancement, bool value) => 
+        _feedback = _feedback with { Enhancements = _feedback.Enhancements.Replace(e => e.Title == enhancement.Title, enhancement.SetInsurerSelected(value)) };
+
+    private void ChangeEnhancementAP(Enhancement enhancement, double newAP) =>    
+        enhancement.SetAP(newAP)
+        .Match(
+            some: enhancement => _feedback = _feedback with { Enhancements = _feedback.Enhancements.Replace(e => e.Title == enhancement.Title, enhancement) },
+            none: error => Snackbar.Add(error.errors.name.First(), Severity.Error)
+        );
+
+    private void ChangeEnhancementComment(Enhancement enhancement, string newComment) =>
+        _feedback = _feedback with { Enhancements = _feedback.Enhancements.Replace(e => e.Title == enhancement.Title, enhancement.SetComment(newComment)) };
+
+    private IEnumerable<string> ValidateMaxEnhancementCommentCharacters(string ch) 
+    {
+        if (!string.IsNullOrEmpty(ch) && 1000 < ch?.Length)
+            yield return "1000 characters is the maximum for an enhancement comment";
+    }
+    #endregion
+
+    #region warranties
+    public class WarrantyDTO
+    {
+        //Need this class with open setters as using the ValueChanged callbacks of MudOption and MudChip did not work as intended
+        public uint Order { get; set; }
+        public string Description { get; set; }
+        public int CoveragePosition { get; set; }
+        public int KnowledgeScrape { get; set; }
+        public string Comment { get; set; }        
+        public bool HasComment => !string.IsNullOrEmpty(Comment);
+
+        public static WarrantyDTO Parse(Warranty warranty) =>
+            new WarrantyDTO { 
+                Order = warranty.Order,
+                Description = warranty.Description, 
+                CoveragePosition = (int)warranty.CoveragePosition, 
+                KnowledgeScrape = (int)warranty.KnowledgeScrape, 
+                Comment = warranty.Comment 
+            };
+        public static Warranty Parse(WarrantyDTO warranty) =>
+            new Warranty(
+                    warranty.Order,
+                    warranty.Description, 
+                    (CoveragePosition)warranty.CoveragePosition, 
+                    (KnowledgeScrape)warranty.KnowledgeScrape,
+                    warranty.Comment);
+        public static bool Compare(WarrantyDTO a, Warranty b)
+        {
+            var a1 = a.Description == b.Description;
+            var a2 = a.CoveragePosition == (int)b.CoveragePosition;
+            var a3 = a.KnowledgeScrape == (int)b.KnowledgeScrape;
+            var a4 = a.Comment == b.Comment;
+
+            return a1 && a2 && a3 && a4;
+        }
+    }
+
+    private async Task OpenEditWarrantyCommentDialog(WarrantyDTO warranty)
+    {
+        var parameters = new DialogParameters { ["Type"] = "Comment", ["Value"] = warranty.Comment };
+        var options = new MudFormDialogControls().DefaultDialogOptions;
+
+        var dialog = DialogService.Show<EditNotesDialog>("Edit the comment of the warranty", parameters, options);
+        var result = await dialog.Result;
+
+        if (!result.Cancelled)
+        {
+            warranty.Comment = (string)result.Data;
+            _warranties.ReplaceInList(w => w.Description == warranty.Description, warranty);
+            //_feedback = _feedback with { Warranties = _feedback.Warranties.Replace(w => w.Description == warranty.Description, warranty.SetComment((string)result.Data)) };
+        }
+    }
+    #endregion
+
+    #region exclusions
+    private void ToggleAllExclusions(bool value) => 
+        _feedback = _feedback with { Exclusions = _feedback.Exclusions.Select(e => e.SetInsurerSelected(value)).ToImmutable() };
+
+    private void ToggleSingleExclusion(Exclusion exclusion, bool value) => 
+        _feedback = _feedback with { Exclusions = _feedback.Exclusions.Replace(e => e.Title == exclusion.Title, exclusion.SetInsurerSelected(value)) };
+
+    private void ChangeExclusionComment(Exclusion exclusion, string newComment) =>
+        _feedback = _feedback with { Exclusions = _feedback.Exclusions.Replace(e => e.Title == exclusion.Title, exclusion.SetComment(newComment)) };
+
+    private IEnumerable<string> ValidateMaxExclusionCommentCharacters(string ch) 
+    {
+        if (!string.IsNullOrEmpty(ch) && 1000 < ch?.Length)
+            yield return "1000 characters is the maximum for an exclusion comment";
+    }
+    #endregion
+}

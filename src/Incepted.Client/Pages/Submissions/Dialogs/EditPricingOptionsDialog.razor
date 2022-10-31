@@ -1,0 +1,98 @@
+﻿@using Incepted.Shared.ValueTypes
+
+
+<MudDialog @bind-IsVisible="_dialogControls.IsVisible" Options="_dialogControls.DefaultDialogOptions">
+    <TitleContent>
+        <MudText Typo="Typo.h6">Pricing options</MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudForm @ref="_dialogControls.Form" @bind-IsValid="@_dialogControls.ValidationSuccess">
+            <MudText Typo="Typo.body1" Style="font-weight: 500">Available limits (as % of EV)</MudText>
+            @foreach (var limit in _limits.Select((l, i) => new { Val = l.value, Enabled = l.enabled, Index = i}))
+            {
+                <MudStack Row AlignItems="AlignItems.Center">
+                    <MudNumericField Value="limit.Val"
+                             ValueChanged="@((double val) => _limits[limit.Index] = (_limits[limit.Index].id, val,  _limits[limit.Index].enabled))"
+                             Variant="Variant.Outlined"
+                             Format="0.##"
+                             Min="0"
+                             HideSpinButtons
+                             Clearable />
+                    <MudSwitch Checked="limit.Enabled"
+                        CheckedChanged="@((bool e) => _limits[limit.Index] = (_limits[limit.Index].id, _limits[limit.Index].value, e))"
+                        Color="Color.Primary" 
+                        UnCheckedColor="Color.Default"/>
+                </MudStack>
+            }
+            <MudText Typo="Typo.body1" Style="font-weight: 500" Class="mt-6">Retention options (as % of EV)</MudText>
+            @foreach (var retention in _retentions.Select((r, i) => new { Val = r.val, Enabled = r.enabled, Index = i}))
+            {
+                <MudStack Row AlignItems="AlignItems.Center">
+                    <MudNumericField Value="retention.Val"
+                             ValueChanged="@((double val) => _retentions[retention.Index] = (val, _retentions[retention.Index].enabled))"
+                             Variant="Variant.Outlined"
+                             Disabled="!retention.Enabled"
+                             Format="0.##"
+                             Min="0"
+                             HideSpinButtons
+                             Clearable />
+                    <MudSwitch Checked="retention.Enabled"
+                             CheckedChanged="@((bool e) => _retentions[retention.Index] = (_retentions[retention.Index].val, e))"
+                             Color="Color.Primary" 
+                             UnCheckedColor="Color.Default"/>
+                 </MudStack>
+            }
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancel</MudButton>
+        <MudButton Disabled="@(!_dialogControls.ValidationSuccess || _dialogControls.Processing)" Variant="Variant.Filled" Color="Color.Primary" OnClick="Save" Class="px-10">
+            @if (_dialogControls.Processing)
+            {
+                <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate />
+                <MudText Class="ms-2">Saving</MudText>
+            }
+            else
+            {
+                <MudText>Save</MudText>
+            }
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+
+@code {
+    [CascadingParameter] MudDialogInstance MudDialog { get; set; }
+    [Parameter, EditorRequired] public List<Limit> Limits { get; set; }
+    [Parameter, EditorRequired] public List<Retention> Retentions { get; set; }
+
+    private MudFormDialogControls _dialogControls = new();
+    private List<(int id, double value, bool enabled)> _limits;
+    private List<(double val, bool enabled)> _retentions;
+
+    protected override void OnInitialized()
+    {
+        _limits = Limits.Select(l => (l.Id, l.Value * 100, l.Enabled)).ToList();
+        _retentions = Retentions.Select(r => (r.Value * 100, r.Enabled)).ToList();
+    }
+
+    void Cancel() => MudDialog.Cancel();  
+
+    private void Save()
+    {
+        _dialogControls.Processing = true;
+
+        var newLimits = _limits
+            .Select(l => 
+                new Limit(
+                    l.id, 
+                    l.value / 100, 
+                    l.value == 0 ? false : l.enabled)
+            ).ToList();
+        var newRetentions = _retentions.Select(r => new Retention(r.val / 100, r.enabled)).ToList();
+
+        _dialogControls.IsVisible = false;
+        _dialogControls.Processing = false;
+        MudDialog.Close(DialogResult.Ok((newLimits, newRetentions)));
+    }
+}

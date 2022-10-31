@@ -1,0 +1,68 @@
+﻿@using Incepted.Client.Extensions
+@using Incepted.Shared.DTOs
+@using Incepted.Shared.ValueTypes
+
+
+<MudDialog @bind-IsVisible="_dialogControls.IsVisible" Options="_dialogControls.DefaultDialogOptions">
+    <TitleContent>
+        <MudText Typo="Typo.h6">
+            <MudIcon Icon="@Icons.Outlined.Add" Class="mr-3" /> Add a new advisor
+        </MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudForm @ref="_dialogControls.Form" @bind-IsValid="@_dialogControls.ValidationSuccess">
+            <MudTextField @bind-Value="@_newAdvisorType"
+                          Variant="Variant.Outlined"
+                          Immediate
+                          Required
+                          RequiredError="You must specify the type of the advisor"
+                          Label="Advisor type">
+            </MudTextField>
+            <MudTextField @bind-Value="@_newAdvisorName"
+                          Variant="Variant.Outlined"
+                          Immediate
+                          Required
+                          RequiredError="You must specify the name of the advisor"
+                          Label="New advisor name" >
+            </MudTextField>
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancel</MudButton>
+        <MudButton Disabled="@(!_dialogControls.ValidationSuccess || _dialogControls.Processing)" Variant="Variant.Filled" Color="Color.Primary" OnClick="AddAdvisor" Class="px-10">
+            @if (_dialogControls.Processing)
+            {
+                <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate />
+                <MudText Class="ms-2">Adding</MudText>
+            }
+            else
+            {
+                <MudText>Add</MudText>
+            }
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+
+@code {
+    [CascadingParameter] MudDialogInstance MudDialog { get; set; }
+    
+    private MudFormDialogControls _dialogControls = new();
+    private string _newAdvisorType;
+    private string _newAdvisorName;
+    
+    void Cancel() => MudDialog.Cancel();  
+
+    private void AddAdvisor()
+    {
+        _dialogControls.Processing = true;
+
+        var newAdvisor = new DealAdvisor { Type = _newAdvisorType, Name = _newAdvisorName };
+
+        _dialogControls.IsVisible = false;
+        _dialogControls.Processing = false;
+        MudDialog.Close(DialogResult.Ok(newAdvisor));
+    }
+
+  
+}

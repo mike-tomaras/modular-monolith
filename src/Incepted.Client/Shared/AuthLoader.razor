@@ -1,0 +1,13 @@
+﻿@using System.Diagnostics.CodeAnalysis
+
+@attribute [ExcludeFromCodeCoverage]
+
+<div class="d-flex justify-center">
+    <MudImage Src="images/logo-icon.png" ObjectPosition="ObjectPosition.Center" Elevation="0" Width="55" Height="55" Class="mb-10" />
+</div>
+<MudText Typo="Typo.body2" Align="Align.Center" GutterBottom>@Message</MudText>
+<MudProgressLinear Color="Color.Primary" Indeterminate Class="my-7" />
+
+@code {
+    [Parameter] public string Message { get; set; } = "Loading, please wait...";
+}

@@ -1,0 +1,63 @@
+﻿@using System.Diagnostics.CodeAnalysis
+@using Incepted.Client.Extensions
+
+@inject NavigationManager Navigation
+@inject SignOutSessionStateManager SignOutManager
+
+<MudNavMenu Class="mt-12">
+    <MudNavLink Href="" Match="NavLinkMatch.All" Icon="@Icons.Material.Outlined.Home">Home</MudNavLink>
+    @if (DrawerOpen)
+    {
+        <MudText Typo="Typo.body2" Class="px-4 mt-7">Deals</MudText>
+    }
+    <MudDivider Class="my-2" />
+    <AuthorizeView Roles="Broker">
+        <MudNavLink Href="/your-submissions" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Outlined.Add">Submissions</MudNavLink>
+        <MudNavLink Href="/terms-received" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Outlined.List">Terms received</MudNavLink>
+    </AuthorizeView>
+    <AuthorizeView Roles="Insurer">
+        <MudNavLink Href="/submissions" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Outlined.List">Submissions</MudNavLink>
+    </AuthorizeView>
+    <MudNavLink Href="/live" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Outlined.Bolt">Live</MudNavLink>
+    <MudNavLink Href="/incepted" Match="NavLinkMatch.Prefix" Icon="@Icons.Outlined.BorderColor">Incepted</MudNavLink>
+    <MudNavLink Href="/cancelled" Match="NavLinkMatch.Prefix" Icon="@Icons.Outlined.Cancel">Cancelled</MudNavLink>
+    @if (DrawerOpen)
+    {
+        <MudText Typo="Typo.body2" Class="px-4 mt-7">Analytics</MudText>
+    }
+    <MudDivider Class="my-2" />
+    <MudNavLink Href="/dashboard" Match="NavLinkMatch.Prefix" Icon="@Icons.Outlined.BarChart">Dashboard</MudNavLink>
+    @if (DrawerOpen)
+    {
+        <MudText id="userGreeting" Typo="Typo.body2" Class="px-4 mt-7">@_userGreeting</MudText>
+    }
+    <MudDivider Class="my-2" />
+    <MudNavLink Href="/your-account" Match="NavLinkMatch.Prefix" Icon="@Icons.Outlined.Settings">Account</MudNavLink>
+    <MudNavLink @onclick="BeginSignOut" Icon="@Icons.Outlined.Logout">Log Out</MudNavLink>
+</MudNavMenu>
+
+@code {
+    [Parameter, EditorRequired]
+    public bool DrawerOpen { get; set; }
+    [CascadingParameter] private Task<AuthenticationState>? authenticationStateTask { get; set; }
+    private string _userGreeting = string.Empty;
+
+    [ExcludeFromCodeCoverage]
+    private async Task BeginSignOut(MouseEventArgs args)
+    {
+        await SignOutManager.SetSignOutState();
+        Navigation.NavigateTo("authentication/logout");
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (authenticationStateTask != null)
+        {
+            var authState = await authenticationStateTask;
+            var name = authState.User.Claims.GetName();
+            _userGreeting = $"Hello, {(string.IsNullOrEmpty(name) ? "there" : name)}!";
+        }        
+
+        await base.OnInitializedAsync();
+    }
+}

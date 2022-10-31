@@ -1,0 +1,24 @@
+﻿<MudButton id="@Id"
+           OnClick="OnClickCallback"
+           Variant="@GetVariant()"
+           DisableElevation
+           Color="Color.Primary"
+           Label="@Label"
+           StartIcon="@StartIcon"
+           Disabled="@Disabled"
+           Class="@Class">
+    <MudText Typo="Typo.subtitle1">@ChildContent</MudText>
+</MudButton>
+
+@code {
+    [Parameter] public string Id { get; set; }
+    [Parameter] public string StartIcon { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+    [Parameter] public string Label { get; set; }
+    [Parameter] public string Class { get; set; }
+    [Parameter] public bool IsPrimary { get; set; } = true;
+    [Parameter] public bool Disabled { get; set; }
+    [Parameter, EditorRequired] public EventCallback<MouseEventArgs> OnClickCallback { get; set; }
+
+    private Variant GetVariant() => IsPrimary ? Variant.Filled : Variant.Outlined;
+}

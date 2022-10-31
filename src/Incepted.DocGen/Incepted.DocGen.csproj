@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net6.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="6.0.0" />
+    <PackageReference Include="Syncfusion.DocIO.Net.Core" Version="20.3.0.48" />
+    <PackageReference Include="Syncfusion.XlsIO.Net.Core" Version="20.3.0.48" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Incepted.Domain.Deals\Incepted.Domain.Deals.csproj" />
+  </ItemGroup>
+
+</Project>

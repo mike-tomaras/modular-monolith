@@ -1,0 +1,176 @@
+﻿@using Incepted.Client.Extensions
+@using Incepted.Shared.DTOs
+@using System.Collections.Immutable
+@using Incepted.Shared.Enums
+
+@inject HttpClient Http
+@inject NavigationManager Navigation
+@inject ISnackbar Snackbar
+
+@if (_goliveComplete)
+{
+    <MudDialog @bind-IsVisible="_dialogControls.IsVisible" Options="_dialogControls.DefaultDialogOptions">
+        <TitleContent>
+            <MudText Typo="Typo.h6">Deal is Live!</MudText>
+            <MudText Typo="Typo.subtitle1">The insurer will be notified and can start working on the deal!</MudText>
+        </TitleContent>
+        <DialogContent>
+            <MudStack Justify="Justify.Center" AlignItems="AlignItems.Center" Class="my-4">
+                <SvgSuccessEnvelope />
+                <MudText Typo="Typo.body1" Class="my-4">What do you want to do next?</MudText>
+            </MudStack>
+            <MudStack Row Justify="Justify.SpaceBetween">
+                <MudInceptedButton IsPrimary="false" OnClickCallback="@(() => Navigation.NavigateTo($"/"))">
+                    &nbsp;&nbsp;Go to home screen&nbsp;&nbsp;
+                </MudInceptedButton>
+                <MudInceptedButton IsPrimary OnClickCallback="@(() => Navigation.NavigateTo($"/live/{Deal.Id}"))">
+                    Go to live deal
+                </MudInceptedButton>
+            </MudStack>
+        </DialogContent>
+    </MudDialog>
+}
+else if (_showGoLiveFeedbackOptions)
+{
+    <MudDialog @bind-IsVisible="_dialogControls.IsVisible" Options="_dialogControls.DefaultDialogOptions">
+        <TitleContent>
+            <MudText Typo="Typo.h6">Feedback for the other insurers</MudText>
+            <MudText Typo="Typo.subtitle1">Your feedback is valuable to insurers. We will let them know your reasons for not selecting them, so you don't have to. Please select from the below:</MudText>
+        </TitleContent>
+        <DialogContent>
+            <MudContainer Style="max-height: 80%; overflow-y: scroll">
+                <MudForm @ref="_dialogControls.Form" @bind-IsValid="@_dialogControls.ValidationSuccess">
+                    <MudStack Class="mb-6">
+                        <FeedbackOption Label="Coverage" Icon="@Icons.Outlined.Shield" @bind-Selected="@_feedbackOptions["Coverage"]" />
+                        <FeedbackOption Label="Enhancements" Icon="@Icons.Outlined.Workspaces" @bind-Selected="@_feedbackOptions["Enhancements"]" />
+                        <FeedbackOption Label="Not competitive" Icon="@Icons.Outlined.TrendingDown" @bind-Selected="@_feedbackOptions["Not competitive"]" />
+                        <FeedbackOption Label="Other market" Icon="@Icons.Outlined.Cancel" @bind-Selected="@_feedbackOptions["Client request for other market"]" />
+                        <FeedbackOption Label="Other" Icon="@Icons.Outlined.Comment" @bind-Selected="@_feedbackOptions["Other"]" />
+                    </MudStack>
+                    <MudText Class="mb-4">Any comments for the insurers?</MudText>
+                    <MudTextField @bind-Value="_goLiveFeedbackComment"
+                              Label="Comment"
+                              Placeholder="Add more commments about why you declined the other NBIs here. This will help the insurers send you better terms in the future."
+                              Variant="Variant.Outlined"
+                              Lines="10"
+                              Validation="@(new Func<string, IEnumerable<string>>(ValidateMaxDeclineCommentCharacters))"
+                              Counter="1000"
+                              Immediate />
+                </MudForm>
+            </MudContainer>            
+        </DialogContent>
+        <DialogActions>
+            <MudButton OnClick="Cancel">Cancel</MudButton>
+            <MudButton Disabled="@(!_dialogControls.ValidationSuccess || _dialogControls.Processing)" Variant="Variant.Filled" Color="Color.Primary" OnClick="GoLive" Class="px-10">
+                @if (_dialogControls.Processing)
+                {
+                    <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate />
+                    <MudText Class="ms-2">Going Live</MudText>
+                }
+                else
+                {
+                    <MudText>Continue</MudText>
+                }
+            </MudButton>
+        </DialogActions>
+    </MudDialog>
+}
+else
+{
+    <MudDialog @bind-IsVisible="_dialogControls.IsVisible" Options="_dialogControls.DefaultDialogOptions">
+        <TitleContent>
+            <MudText Typo="Typo.h6">Go live with @Deal.Name</MudText>
+            <MudText Typo="Typo.subtitle1">Which insurer do you want to go live with?</MudText>
+        </TitleContent>
+        <DialogContent>
+            <MudSelect 
+                T="SubmissionFeedbackDTO" 
+                Label="Insurer" 
+                Variant="Variant.Outlined"
+                Required
+                RequiredError="You must select an insurance company to go live with"
+                @bind-Value="_selectedFeedback">
+                @foreach (var feedback in Feedbacks)
+                {
+                    <MudSelectItem T="SubmissionFeedbackDTO" Value="@feedback" >@feedback.InsuranceCompanyName</MudSelectItem>
+                }
+            </MudSelect>
+        </DialogContent>
+        <DialogActions>
+            <MudButton OnClick="Cancel">Cancel</MudButton>
+            <MudButton 
+                Variant="Variant.Filled" 
+                Color="Color.Primary" 
+                OnClick="ShowGoLiveFeedback" 
+                Class="px-10">
+                <MudText>Continue</MudText>
+            </MudButton>
+        </DialogActions>
+    </MudDialog>
+}
+
+@code {
+    [CascadingParameter] MudDialogInstance MudDialog { get; set; }
+    [Parameter, EditorRequired] public IEnumerable<SubmissionFeedbackDTO> Feedbacks { get; set; }
+    [Parameter, EditorRequired] public DealSubmissionDTO Deal { get; set; }
+
+    private MudFormDialogControls _dialogControls = new();
+    private SubmissionFeedbackDTO _selectedFeedback;
+    private bool _goliveComplete = false;
+    private bool _showGoLiveFeedbackOptions = false;
+    private string _goLiveFeedbackComment = string.Empty;
+    private IDictionary<string, bool> _feedbackOptions = new Dictionary<string, bool>
+    {
+        {"Coverage", false},
+        {"Enhancements", false},
+        {"Not competitive", false},
+        {"Client request for other market", false},
+        {"Other", false}
+    };
+
+    private void Cancel() => MudDialog.Cancel();
+
+    private IEnumerable<string> ValidateMaxDeclineCommentCharacters(string ch) 
+    {
+        if (!string.IsNullOrEmpty(ch) && 1000 < ch?.Length)
+            yield return "1000 characters is the maximum the comment can be";
+    }
+
+    private void ShowGoLiveFeedback()
+    {
+        _dialogControls.DefaultDialogOptions.MaxWidth = MaxWidth.Medium;
+        MudDialog.SetOptions(_dialogControls.DefaultDialogOptions);
+        _showGoLiveFeedbackOptions = true;
+    }
+
+    private bool ValidateFeedback() => _feedbackOptions.Values.Any(v => v == true);
+    private async Task GoLive()
+    {
+        if (!ValidateFeedback())
+        {
+            Snackbar.Add("Please select at least one feedback option!", Severity.Warning);
+            return;
+        }
+
+        _dialogControls.Processing = true;
+
+        var payload = new GoLiveDTO(_selectedFeedback.Id, Deal.Id, _selectedFeedback.InsuranceCompanyId);
+
+        (await Http
+            .PutToApiAsync(
+                path: "api/v1/deals/golive",
+                payload,
+                Snackbar
+            ))
+            .MatchSome(_ => 
+            {
+                 _dialogControls.DefaultDialogOptions.MaxWidth = MaxWidth.Small;
+                MudDialog.SetOptions(_dialogControls.DefaultDialogOptions);
+
+                _showGoLiveFeedbackOptions = false;
+                _goliveComplete = true;   
+            });
+
+        _dialogControls.Processing = false;
+    }
+}

@@ -1,0 +1,65 @@
+﻿@inherits LayoutComponentBase
+
+<MudThemeProvider Theme="InceptedTheme" />
+<MudDialogProvider />
+<MudSnackbarProvider />
+
+<MudLayout>
+    <AuthorizeView>
+        <Authorized>
+            <MudAppBar Color="Color.Transparent" Elevation="0" Dense>
+                <MudIconButton id="drawerToggleButton" Icon="@_drawerToggleButton" Size="Size.Small" Variant="Variant.Filled" OnClick="@((e) => DrawerToggle())" Class="ml-n10 mt-16" Style="background-color: white; border-radius: 50%;" />               
+            </MudAppBar>
+            <MudDrawer @bind-Open="_drawerOpen" Elevation="5" Color="Color.Secondary" Variant="@DrawerVariant.Mini" OpenMiniOnHover="false">
+                <MudDrawerHeader>
+                    @if (_drawerOpen)
+                    {
+                        <MudImage id="drawerImage" Fluid Src="images/logo-text.png" Alt="Incepted" Class="my-auto" />
+                    }
+                    else
+                    {
+                        <MudImage id="drawerImage" Src="images/logo-icon.png" Alt="Incepted" Width="44" Height="44" Class="my-1 ml-n4 pa-1" />
+                    }
+                </MudDrawerHeader>
+                <NavMenu DrawerOpen="@_drawerOpen" />
+            </MudDrawer>
+        </Authorized>
+    </AuthorizeView>
+    <MudMainContent>
+        <MudContainer MaxWidth="MaxWidth.Large" Class="mb-8 pt-4">
+            @Body
+        </MudContainer>
+    </MudMainContent>
+</MudLayout>
+
+@code {
+    bool _drawerOpen = true;
+    string _drawerToggleButton = Icons.Filled.ChevronLeft;
+
+    void DrawerToggle()
+    {
+        _drawerOpen = !_drawerOpen;
+        _drawerToggleButton = _drawerOpen ? Icons.Outlined.ChevronLeft : Icons.Outlined.ChevronRight;
+    }
+
+    MudTheme InceptedTheme = new MudTheme()
+        {
+            Palette = new Palette()
+            {
+                Primary = new MudBlazor.Utilities.MudColor(value: "0093DD"),
+                Secondary = new MudBlazor.Utilities.MudColor(value: "ECEFF1"),
+                SecondaryContrastText = new MudBlazor.Utilities.MudColor(value: "003548"),
+            },
+            Typography = new Typography()
+            {
+                Default = new Default()
+                {
+                    FontFamily = new[] { "Poppins", "sans-serif" },                    
+                }
+            },
+            LayoutProperties = new LayoutProperties()
+            {
+                DefaultBorderRadius = "12px"
+            }
+        };
+}

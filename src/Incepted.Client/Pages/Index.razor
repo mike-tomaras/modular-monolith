@@ -1,0 +1,96 @@
+﻿@page "/"
+
+@using System.Security.Claims
+
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject HttpClient Http
+
+@attribute [Authorize]
+
+<PageTitle>Home - Incepted</PageTitle>
+
+<AuthorizeView Roles="Broker">
+    <h1>This is only for brokers</h1>
+</AuthorizeView>
+
+<MudText Typo="Typo.h3" GutterBottom>Hello, world!</MudText>
+<MudText Class="mb-8">Welcome to your new app, powered by MudBlazor!</MudText>
+<MudAlert Severity="Severity.Normal">You can find documentation and examples on our website here: <MudLink Href="https://mudblazor.com" Typo="Typo.body2" Color="Color.Inherit"><b>www.mudblazor.com</b></MudLink></MudAlert>
+
+<button @onclick="GetClaimsPrincipalData">Get ClaimsPrincipal Data</button>
+
+<p>@_authMessage</p>
+
+@if (_claims.Count() > 0)
+{
+    <ul>
+        @foreach (var claim in _claims)
+        {
+            <li>@claim.Type === @claim.Value</li>
+        }
+    </ul>
+}
+
+<p>@_surnameMessage</p>
+
+<button @onclick="CallAPI">Call API</button>
+
+@if (forecasts == null)
+{
+    <p><em>No api results, press button</em></p>
+}
+else
+{
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Date</th>
+                <th>Temp. (C)</th>
+                <th>Temp. (F)</th>
+                <th>Summary</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var forecast in forecasts)
+            {
+                @*<tr>
+                    <td>@forecast.Date.ToShortDateString()</td>
+                    <td>@forecast.TemperatureC</td>
+                    <td>@forecast.TemperatureF</td>
+                    <td>@forecast.Summary</td>
+                </tr>*@
+            }
+        </tbody>
+    </table>
+}
+
+@code {
+    private string _authMessage = string.Empty;
+    private string _surnameMessage = string.Empty;
+    private IEnumerable<Claim> _claims = Enumerable.Empty<Claim>();
+
+    private DealListItemDTO[]? forecasts;
+
+    protected async Task CallAPI()
+    {
+        forecasts = await Http.GetFromJsonAsync<DealListItemDTO[]>("WeatherForecast");                
+    }
+
+    private async Task GetClaimsPrincipalData()
+    {
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+
+        if (user.Identity != null && user.Identity.IsAuthenticated)
+        {
+            _authMessage = $"{user.Identity.Name} is authenticated.";
+            _claims = user.Claims;
+            _surnameMessage = 
+                $"Surname: {user.FindFirst(c => c.Type == ClaimTypes.Surname)?.Value}";
+        }
+        else
+        {
+            _authMessage = "The user is NOT authenticated.";
+        }
+    }
+}

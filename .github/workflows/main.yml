@@ -1,0 +1,70 @@
+name: build, test and deploy
+on:
+  push:
+    branches:
+      - main
+
+env:
+  AZURE_WEBAPP_NAME: inpd-eastus-web-portal
+  AZURE_WEBAPP_PACKAGE_PATH: './dist/app'  
+  DOTNET_VERSION: '6.0.x'
+  AUTH0_AUTHORITY_PROD: 'https://incepted-prod.eu.auth0.com' 
+  AUTH0_CLIENTID_PROD: 'Plqz9wJReYuVKxKYmYH5jl8ypGQUOK40' 
+  AUTH0_AUDIENCE_PROD: 'https://api-prod.incepted.co.uk' 
+  PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
+  PULUMI_STACK_NAME: incepted/portal
+  PULUMI_WORKING_DIRECTORY: infra/iac/Incepted.Infra.Portal 
+
+jobs:
+  build-test-deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      
+      # Build and Test
+      - name: checkout
+        uses: actions/checkout@v3
+      - name: setup libraries
+        uses: actions/setup-dotnet@v2
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }} 
+      - name: build test and publish
+        run: |
+          dotnet restore
+          dotnet build -c Release
+          dotnet test ./Incepted.sln
+      
+      # Publish
+      - name: publish
+        run: dotnet publish ./src/Incepted.API/ -c Release -o ${{ env.AZURE_WEBAPP_PACKAGE_PATH }}
+      
+      # Prod deploy
+      - name: preview infra update from pr
+        if: ${{ github.event_name == 'pull_request' }}
+        uses: pulumi/actions@v3
+        with:
+          command: preview
+          stack-name: ${{ env.PULUMI_STACK_NAME }}/prod
+          work-dir: ${{ env.PULUMI_WORKING_DIRECTORY }}
+      - name: apply infra update
+        if: ${{ github.event_name == 'push' }}
+        uses: pulumi/actions@v3
+        with:
+          command: up
+          stack-name: ${{ env.PULUMI_STACK_NAME }}/prod
+          work-dir: ${{ env.PULUMI_WORKING_DIRECTORY }}
+      - name: replace prod settings
+        uses: microsoft/variable-substitution@v1 
+        with:
+          files: '${{ env.AZURE_WEBAPP_PACKAGE_PATH }}/wwwroot/appsettings.json'
+        env:
+          Auth0.Authority: ${{ env.AUTH0_AUTHORITY_PROD }}
+          Auth0.ClientId: ${{ env.AUTH0_CLIENTID_PROD }}
+          Auth0.Audience: ${{ env.AUTH0_AUDIENCE_PROD }}
+      - name: deploy
+        uses: azure/webapps-deploy@v2
+        with: 
+          app-name: ${{ env.AZURE_WEBAPP_NAME }} 
+          publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE_PROD  }} 
+          package: ${{ env.AZURE_WEBAPP_PACKAGE_PATH }}
+      

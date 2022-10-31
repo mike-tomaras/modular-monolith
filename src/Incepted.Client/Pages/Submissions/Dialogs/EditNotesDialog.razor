@@ -1,0 +1,69 @@
+﻿<MudDialog @bind-IsVisible="@_dialogControls.IsVisible" Options="@_dialogControls.DefaultDialogOptions">
+    <TitleContent>
+        <MudText Typo="Typo.h6">
+            <MudIcon Icon="@Icons.Outlined.Edit" Class="mr-3" /> Edit @Type
+        </MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudForm @ref="_dialogControls.Form" @bind-IsValid="@_dialogControls.ValidationSuccess">
+            <MudText Typo="Typo.body1" Class="mb-4">Add any notes about any part of the deal here</MudText>            
+            <MudTextField 
+                @bind-Value="@Value" 
+                Label="@Type" 
+                Variant="Variant.Outlined" 
+                Lines="15" 
+                Validation="@(new Func<string, IEnumerable<string>>(ValidateMaxCharacters))"
+                Counter="5000" 
+                Immediate/>
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancel</MudButton>
+        <MudButton Disabled="!HasChanged() || !_dialogControls.ValidationSuccess || _dialogControls.Processing"
+                   Variant="Variant.Filled"
+                   Color="Color.Primary"
+                   OnClick="@(() => SaveNotes())"
+                   Class="px-10">
+            @if (_dialogControls.Processing)
+            {
+                <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate />
+                <MudText Class="ms-2">Saving</MudText>
+            }
+            else
+            {
+                <MudText>Save</MudText>
+            }
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+
+@code {
+    [Parameter, EditorRequired] public string Type { get; set; } = string.Empty;
+    [Parameter] public string Value { get; set; } = string.Empty;
+    [CascadingParameter] MudDialogInstance MudDialog { get; set; }
+
+    private string _currentNotes = string.Empty;
+    private MudFormDialogControls _dialogControls = new();
+
+    protected override void OnInitialized() => _currentNotes = Value;
+
+    private bool HasChanged() => _currentNotes != Value; 
+
+    private void Cancel() => MudDialog.Cancel();
+
+    private IEnumerable<string> ValidateMaxCharacters(string ch) 
+    {
+        if (!string.IsNullOrEmpty(ch) && 5000 < ch?.Length)
+            yield return $"5000 characters is the maximum the {Type.ToLower()} can be";
+    }
+
+    private void SaveNotes()
+    {
+        _dialogControls.Processing = true;
+
+        MudDialog.Close(DialogResult.Ok(Value));
+        
+        _dialogControls.Processing = false;
+    }
+}

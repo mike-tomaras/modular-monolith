@@ -1,0 +1,27 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+		<TargetFramework>net6.0</TargetFramework>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<Nullable>enable</Nullable>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<InternalsVisibleTo Include="Incepted.Db.DataSeeding" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<InternalsVisibleTo Include="Incepted.Db.Tests.Unit" />
+		<InternalsVisibleTo Include="DynamicProxyGenAssembly2" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<PackageReference Include="Microsoft.Azure.Cosmos" Version="3.31.0" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<ProjectReference Include="..\Incepted.Domain.Companies\Incepted.Domain.Companies.csproj" />
+		<ProjectReference Include="..\Incepted.Domain.Deals\Incepted.Domain.Deals.csproj" />
+	</ItemGroup>
+
+</Project>

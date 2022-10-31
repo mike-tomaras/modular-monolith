@@ -1,0 +1,37 @@
+﻿<Project Sdk="Microsoft.NET.Sdk.BlazorWebAssembly">
+
+	<PropertyGroup>
+		<TargetFramework>net6.0</TargetFramework>
+		<Nullable>enable</Nullable>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<BlazorWebAssemblyLoadAllGlobalizationData>true</BlazorWebAssemblyLoadAllGlobalizationData>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<InternalsVisibleTo Include="Incepted.Client.Tests.Unit" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<PackageReference Include="CompareNETObjects" Version="4.78.0" />
+		<PackageReference Include="Humanizer.Core" Version="2.14.1" />
+		<PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly" Version="6.0.9" />
+		<PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.Authentication" Version="6.0.9" />
+		<PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.DevServer" Version="6.0.9" PrivateAssets="all" />
+		<PackageReference Include="Microsoft.Extensions.Http" Version="6.0.0" />
+		<PackageReference Include="MudBlazor" Version="6.0.16" />
+		<PackageReference Include="Optional" Version="4.0.0" />
+		<PackageReference Include="Serilog.Sinks.BrowserHttp" Version="1.0.0-dev-00021" />
+		<PackageReference Include="Syncfusion.Blazor.Charts" Version="20.3.0.48" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<ProjectReference Include="..\Incepted.Shared\Incepted.Shared.csproj" />
+	</ItemGroup>
+
+	<ItemGroup>
+	  <Content Update="Pages\Submissions\UiElements\MatrixForExclusionCollation.razor">
+	    <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
+	  </Content>
+	</ItemGroup>
+
+</Project>

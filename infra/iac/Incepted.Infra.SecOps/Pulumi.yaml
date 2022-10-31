@@ -1,0 +1,3 @@
+name: secops
+runtime: dotnet
+description: All security related cloud resources

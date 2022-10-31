@@ -1,0 +1,25 @@
+﻿@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject NavigationManager Navigation
+
+<div class="d-flex justify-center">
+    <MudImage Src="images/logo-icon.png" ObjectPosition="ObjectPosition.Center" Elevation="0" Width="55" Height="55" Class="mb-10" />
+</div>
+<MudText Typo="Typo.h5" Align="Align.Center" GutterBottom>You are not authorized to view this content</MudText>
+<MudText Typo="Typo.body1" Align="Align.Center" GutterBottom>
+    Please contact us at&nbsp;
+    <MudLink Href="mailto:info@incepted.co.uk">info@incepted.co.uk</MudLink>
+    &nbsp;to give you the correct permissions.
+</MudText>
+
+@code {
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+
+        if (user.Identity == null || !user.Identity.IsAuthenticated)
+            Navigation.NavigateTo("/authentication/login");
+
+        await base.OnInitializedAsync();
+    }
+}

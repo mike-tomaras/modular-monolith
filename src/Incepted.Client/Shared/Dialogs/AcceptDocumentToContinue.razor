@@ -1,0 +1,80 @@
+﻿@using Incepted.Client.Services
+@using Incepted.Shared.DTOs
+
+@inject ISnackbar Snackbar
+@inject IDealFileService DealFiles
+@inject HttpClient Http
+@inject NavigationManager Navigation
+
+
+<MudDialog @bind-IsVisible="_dialogControls.IsVisible" Options="_dialogControls.DefaultDialogOptions">
+    <TitleContent>
+        <MudText Typo="Typo.h6">Accept the NDA</MudText>
+        <MudText Typo="Typo.subtitle1">You must read and accept this NDA before you can access this deal.</MudText>
+    </TitleContent>    
+    <DialogContent>
+        <MudStack AlignItems="AlignItems.Center">
+            <MudIcon Icon="@Icons.Outlined.Download" Size="Size.Large" Color="Color.Primary" />
+            <MudInceptedButton 
+                IsPrimary
+                OnClickCallback="DownloadFile">
+                Download
+            </MudInceptedButton>
+            <MudCheckBox @bind-Checked="@_accepted" Label="I accept the NDA of this deal" Color="Color.Primary"></MudCheckBox>   
+        </MudStack>            
+    </DialogContent>
+    <DialogActions>
+        <MudButton id="dialogCancel" OnClick="Cancel">Cancel</MudButton>
+        <MudButton id="dialogAccept" Disabled="@(!_accepted || _dialogControls.Processing)" Variant="Variant.Filled" Color="Color.Primary" OnClick="Accept" Class="px-10">
+            @if (_dialogControls.Processing)
+            {
+                <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate />
+                <MudText Class="ms-2">Accepting</MudText>
+            }
+            else
+            {
+                <MudText>Accept</MudText>
+            }
+        </MudButton>
+    </DialogActions>
+    </MudDialog>
+
+
+@code {
+    [CascadingParameter] MudDialogInstance MudDialog { get; set; }
+    [Parameter, EditorRequired] public Guid FeedbackId { get; set; }
+    [Parameter, EditorRequired] public Guid DealId { get; set; }
+    [Parameter, EditorRequired] public Guid InsuranceCompanyId { get; set; }
+    [Parameter, EditorRequired] public string OnBehalfOf { get; set; }
+    [Parameter, EditorRequired] public FileDTO File { get; set; }
+
+    private bool _accepted;
+    private MudFormDialogControls _dialogControls = new();
+
+    protected override void OnInitialized()
+    {
+        _dialogControls.DefaultDialogOptions.DisableBackdropClick = true;
+        _dialogControls.DefaultDialogOptions.CloseButton = false;
+        MudDialog.SetOptions(_dialogControls.DefaultDialogOptions);
+    }
+
+    private void Cancel() => Navigation.NavigateTo($"/submissions");
+
+    private async Task DownloadFile() => await DealFiles.DownloadFileAsync(DealId, File);
+
+    private async Task Accept()
+    {
+        _dialogControls.Processing = true;
+
+        var payload = new AcceptFileDTO(FeedbackId, DealId, InsuranceCompanyId, File);
+        (await Http
+            .PutToApiAsync<AcceptFileDTO>(
+                path: "api/v1/deals/acceptfile",
+                payload,
+                Snackbar
+            ))
+            .MatchSome(_ => MudDialog.Close(DialogResult.Ok(true)));
+
+        _dialogControls.Processing = false;        
+    }
+}

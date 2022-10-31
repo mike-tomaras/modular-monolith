@@ -1,0 +1,12 @@
+config:
+  azure-native:clientId: 029e576c-8b41-4837-85ab-483ee9b77756
+  azure-native:clientSecret:
+    secure: AAABAApJB4qC3k2U298kRUxwcuKkwlyxQYpCwF2f1/wEaQHNur+rtMryxekJXkgMBxV5mkAzjd2TAgSvEhmUis5YD86CmvOZ
+  azure-native:location: eastus
+  azure-native:subscriptionId: 2f4b3e1b-d453-4d91-b7b5-e6543d63fde1
+  azure-native:tenantId: fc9d6569-82df-476d-8d9c-0d9a68edf376
+  portal:azn-location: eastus
+  portal:sqlAdminPassword:
+    secure: AAABAMV39y1DcjnWX62xi8kTsiWPw6HL+qG2ZhpA04huc0Uul1fHgi1M8BFJ5BJrhvsLu1LNMXpilnJj167r7taJVBQBFn1N
+  portal:sqlAdminUsername: incptdadmin
+  pulumi:template: azure-csharp

@@ -1,0 +1,24 @@
+﻿<MudAlert 
+    @onclick="@ToggleSelection" 
+    Icon="@Icon"
+    Elevation="0"
+    Variant="@(Selected ? Variant.Filled : Variant.Outlined)"
+    Style="@(Selected 
+                ? "color: var(--mud-palette-white); background-color: var(--mud-palette-primary)"
+                : "color: var(--mud-palette-primary); background-color: var(--mud-palette-white)")">
+    @Label
+</MudAlert>
+
+
+@code {
+    [Parameter] public string Label { get; set; }
+    [Parameter] public string Icon { get; set; }
+    [Parameter] public bool Selected { get; set; } = false;
+    [Parameter] public EventCallback<bool> SelectedChanged { get; set; }
+
+    private async Task ToggleSelection()
+    {
+        Selected = !Selected;
+        await SelectedChanged.InvokeAsync(Selected);
+    }
+}

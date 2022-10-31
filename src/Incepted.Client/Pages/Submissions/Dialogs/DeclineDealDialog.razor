@@ -1,0 +1,160 @@
+﻿@using Incepted.Client.Extensions
+@using Incepted.Shared.DTOs
+@using System.Collections.Immutable
+@using Incepted.Shared.Enums
+
+@inject HttpClient Http
+@inject NavigationManager Navigation
+@inject ISnackbar Snackbar
+
+@if (_declineComplete)
+{
+    <MudDialog @bind-IsVisible="_dialogControls.IsVisible" Options="_dialogControls.DefaultDialogOptions">
+        <TitleContent>
+            <MudText Typo="Typo.h6">Deal declined!</MudText>
+            <MudText Typo="Typo.subtitle1">The broker will be notified about your decision.</MudText>
+        </TitleContent>
+        <DialogContent>
+            <MudStack Justify="Justify.Center" AlignItems="AlignItems.Center" Class="my-4">
+                <SvgSuccessEnvelope />
+                <MudText Typo="Typo.body1" Class="my-4">What do you want to do next?</MudText>
+            </MudStack>
+            <MudStack Row Justify="Justify.SpaceBetween">
+                <MudInceptedButton IsPrimary="false" OnClickCallback="@(() => Navigation.NavigateTo($"/"))">
+                    &nbsp;&nbsp;Go to home screen&nbsp;&nbsp;
+                </MudInceptedButton>
+                <MudInceptedButton IsPrimary OnClickCallback="@(() => Navigation.NavigateTo($"/submissions"))">
+                    Go to submissions
+                </MudInceptedButton>
+            </MudStack>
+        </DialogContent>
+    </MudDialog>
+}
+else if (_showDeclineFeedbackOptions)
+{
+    <MudDialog @bind-IsVisible="_dialogControls.IsVisible" Options="_dialogControls.DefaultDialogOptions">
+        <TitleContent>
+            <MudText Typo="Typo.h6">Decline the deal</MudText>
+            <MudText Typo="Typo.subtitle1">Your feedback is valuable to brokers. We will let them know your reasons for declining this deal, so you don't have to. Please select from the below:</MudText>
+        </TitleContent>
+        <DialogContent>
+            <MudForm @ref="_dialogControls.Form" @bind-IsValid="@_dialogControls.ValidationSuccess">
+                <MudStack Class="mb-6">
+                    <FeedbackOption Label="Timing" Icon="@Icons.Outlined.AlarmOff" @bind-Selected="@_feedbackOptions["Timing"]" />
+                    <FeedbackOption Label="No risk appetite" Icon="@Icons.Outlined.ThumbDown" @bind-Selected="@_feedbackOptions["No risk appetite"]" />
+                    <FeedbackOption Label="Not competitive" Icon="@Icons.Outlined.TrendingDown" @bind-Selected="@_feedbackOptions["Not competitive"]" />
+                    <FeedbackOption Label="Previously declined" Icon="@Icons.Outlined.Cancel" @bind-Selected="@_feedbackOptions["Previously declined"]" />
+                    <FeedbackOption Label="Other" Icon="@Icons.Outlined.Comment" @bind-Selected="@_feedbackOptions["Other"]" />
+                </MudStack>
+                <MudText Class="mb-4">Any comments for the broker?</MudText>
+                <MudTextField
+                    @bind-Value="_declineFeedbackComment" 
+                    Label="Comment"
+                    Placeholder="Add more commments about why you declined the deal here. This will help the brokers send you more relevant deals in the future."                    
+                    Variant="Variant.Outlined"
+                    Lines="10" 
+                    Validation="@(new Func<string, IEnumerable<string>>(ValidateMaxDeclineCommentCharacters))"
+                    Counter="1000" 
+                    Immediate/>           
+            </MudForm>
+        </DialogContent>
+        <DialogActions>
+            <MudButton OnClick="Cancel">Cancel</MudButton>
+            <MudButton Disabled="@(!_dialogControls.ValidationSuccess || _dialogControls.Processing)" Variant="Variant.Filled" Color="Color.Primary" OnClick="DeclineDeal" Class="px-10">
+                @if (_dialogControls.Processing)
+                {
+                    <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate />
+                    <MudText Class="ms-2">Declining</MudText>
+                }
+                else
+                {
+                    <MudText>Continue</MudText>
+                }
+            </MudButton>
+        </DialogActions>
+    </MudDialog>
+}
+else
+{
+    <MudDialog @bind-IsVisible="_dialogControls.IsVisible" Options="_dialogControls.DefaultDialogOptions">
+        <TitleContent>
+            <MudText Typo="Typo.h6">Decline the deal</MudText>
+            <MudText Typo="Typo.subtitle1">Are you sure you want to decline the deal? This action is irreversible!</MudText>
+        </TitleContent>        
+        <DialogActions>
+            <MudButton OnClick="Cancel">Cancel</MudButton>
+            <MudButton                 
+                Variant="Variant.Filled" 
+                Color="Color.Primary" 
+                OnClick="ShowDeclineFeedback" 
+                Class="px-10">
+                <MudText>Continue</MudText>
+            </MudButton>
+        </DialogActions>
+    </MudDialog>
+}
+
+@code {
+    [CascadingParameter] MudDialogInstance MudDialog { get; set; }
+    [Parameter, EditorRequired] public Guid FeedbackId { get; set; }
+    [Parameter, EditorRequired] public Guid DealId { get; set; }
+
+    private MudFormDialogControls _dialogControls = new();
+    private bool _declineComplete = false;
+    private bool _showDeclineFeedbackOptions = false;
+    private string _declineFeedbackComment = string.Empty;
+    private IDictionary<string, bool> _feedbackOptions = new Dictionary<string, bool>
+    {
+        {"Timing", false},
+        {"No risk appetite", false},
+        {"Not competitive", false},
+        {"Previously declined", false},
+        {"Other", false}
+    };
+
+    private void Cancel() => MudDialog.Cancel();
+
+    private IEnumerable<string> ValidateMaxDeclineCommentCharacters(string ch) 
+    {
+        if (!string.IsNullOrEmpty(ch) && 1000 < ch?.Length)
+            yield return "1000 characters is the maximum the comment can be";
+    }
+
+    private void ShowDeclineFeedback()
+    {
+        _dialogControls.DefaultDialogOptions.MaxWidth = MaxWidth.Medium;
+        MudDialog.SetOptions(_dialogControls.DefaultDialogOptions);
+        _showDeclineFeedbackOptions = true;
+    }
+
+    private bool ValidateFeedback() => _feedbackOptions.Values.Any(v => v == true);
+    private async Task DeclineDeal()
+    {
+        if (!ValidateFeedback())
+        {
+            Snackbar.Add("Please select at least one feedback option!", Severity.Warning);
+            return;
+        }
+        
+        _dialogControls.Processing = true;
+
+        var payload = new SubmitDealFeedbackDTO(FeedbackId, DealId);
+        
+        (await Http
+            .PutToApiAsync<SubmitDealFeedbackDTO>(
+                path: "api/v1/deals/feedback/decline",
+                payload,
+                Snackbar
+            ))
+            .MatchSome(_ => 
+            {
+                 _dialogControls.DefaultDialogOptions.MaxWidth = MaxWidth.Small;
+                MudDialog.SetOptions(_dialogControls.DefaultDialogOptions);
+                                
+                _showDeclineFeedbackOptions = false;
+                _declineComplete = true;   
+            });
+
+       _dialogControls.Processing = false;
+    }
+}

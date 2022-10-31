@@ -1,0 +1,38 @@
+﻿<SfChart Title="@(_chartLoading ? "(Refreshing...)" : string.Empty)" Palettes="@_chartPalette" SelectionMode="SelectionMode.Point">
+    <ChartArea><ChartAreaBorder Width="0" /></ChartArea>
+    <ChartPrimaryYAxis LabelFormat="n2" />
+    <ChartPrimaryXAxis ValueType="Syncfusion.Blazor.Charts.ValueType.Category" />
+    <ChartTooltipSettings Enable />
+    <ChartZoomSettings EnablePinchZooming EnableSelectionZooming />
+    <ChartSeriesCollection>
+        <ChartSeries DataSource="@_chartData" XName="Insurer" YName="Value" Type="ChartSeriesType.Column" />
+    </ChartSeriesCollection>    
+</SfChart>
+
+
+@code {
+    [Parameter, EditorRequired] public IEnumerable<SubmissionFeedbackDTO> Feedbacks { get; set; }
+
+    private string[] _chartPalette = new string[] { "#0093DD" };
+    private bool _chartLoading;
+    private class ChartData
+    {
+        public string Insurer { get; set; }
+        public double Value { get; set; }
+    };
+    private IEnumerable<ChartData> _chartData;
+
+    protected override async Task OnInitializedAsync() => await Update();
+
+    public async Task Update()
+    {
+        _chartLoading = true;
+        await Task.Yield();//https://www.meziantou.net/don-t-freeze-ui-while-executing-cpu-intensive-work-in-blazor-webassembly.htm
+
+        _chartData = Feedbacks.Select(f => new ChartData { Insurer = f.InsuranceCompanyName, Value = (double)f.Pricing.DeMinimis.Amount });
+
+        StateHasChanged();
+        await Task.Delay(1);//https://www.meziantou.net/don-t-freeze-ui-while-executing-cpu-intensive-work-in-blazor-webassembly.htm
+        _chartLoading = false;
+    }
+}

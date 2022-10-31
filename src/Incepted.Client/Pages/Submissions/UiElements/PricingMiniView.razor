@@ -1,0 +1,26 @@
+﻿<MudPaper Elevation="7" Class="rounded-lg">
+    <MudStack Row Spacing="1" AlignItems="AlignItems.Center" Justify="Justify.FlexStart">
+        <MudText Typo="Typo.h3" Color="Color.Primary" Class="ml-4 mr-2">@Options.First().Limit.ToString()%</MudText>
+        <div style="background-color:var(--mud-palette-background-grey)">
+            <MudStack Spacing="2" Class="my-2">
+                @foreach (var option in Options)
+                {
+                    <MudText Typo="Typo.body1" Color="Color.Primary" Class="mx-4">@option.Retention.ToString()</MudText>
+                }
+            </MudStack>
+        </div>
+        <MudStack Spacing="2" Class="ml-8 my-2">
+            @foreach (var option in Options)
+            {
+                <MudText Typo="Typo.body1" Color="Color.Default">@PricingCalc.TotalString(option.Premium, Enhancements, UwFee)</MudText>
+            }
+        </MudStack>
+    </MudStack>
+</MudPaper>
+
+
+@code {
+    [Parameter, EditorRequired] public Money UwFee { get; set; }
+    [Parameter, EditorRequired] public IEnumerable<PricingOption> Options { get; set; }
+    [Parameter, EditorRequired] public IEnumerable<Enhancement> Enhancements { get; set; }
+}

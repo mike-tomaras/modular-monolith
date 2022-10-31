@@ -1,0 +1,209 @@
+﻿@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject HttpClient Http
+@inject NavigationManager Navigation
+@inject ISnackbar Snackbar
+
+<style>
+    th {
+        font-weight: 500; 
+        background-color: var(--mud-palette-secondary);        
+    }
+</style>
+
+@if (_showEmptyTable)
+{
+    <MudTable Items="@(new List<int> { 1 })"
+          Breakpoint="Breakpoint.Sm"
+          Loading="@_loading"
+          LoadingProgressColor="Color.Info"
+          Virtualize="false">
+        <HeaderContent>
+            <MudTh>Project</MudTh>
+            <MudTh>Enterprise Value</MudTh>
+            <MudTh>Deadline</MudTh>
+            <MudTh>Assigned To</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd colspan="4">
+                <MudStack AlignItems="AlignItems.Center" Spacing="8" Class="mt-4">
+                    <MudIcon Icon="@Icons.Outlined.FolderOff" Style="font-size: 6rem;" Color="Color.Primary" />
+                    <MudText Typo="Typo.h6">No deals to display</MudText>
+                    <MudText Typo="Typo.body2">Not what you expected? Contact Incepted support if that is the case</MudText>
+                </MudStack>
+            </MudTd>
+        </RowTemplate>
+    </MudTable>
+}
+else
+{
+    <MudTable Items="@_deals"
+          Hover
+          Breakpoint="Breakpoint.Sm"
+          Loading="@_loading"
+          LoadingProgressColor="Color.Info"
+          Virtualize="false"
+          OnRowClick="RowClicked"
+          T="DealListItemDTO"
+          GroupBy="@_groupDefinition"
+          GroupFooterClass="mb-4">
+        <ColGroup>
+            <col />
+            <AuthorizeView Roles="Broker">
+                @if (UriPath != "terms-received")
+                {
+                    <col />
+                }                
+            </AuthorizeView>
+            <AuthorizeView Roles="Insurer">
+                <col />
+                <col />
+                <col />
+            </AuthorizeView>            
+            <col />
+            <col />
+            <col />
+            <col />            
+        </ColGroup>
+        <HeaderContent>
+            <MudTh>Project</MudTh>
+            <AuthorizeView Roles="Broker">
+                @if (UriPath != "terms-received")
+                {
+                    <MudTh>Is Draft?</MudTh>
+                }                
+            </AuthorizeView>
+            <AuthorizeView Roles="Insurer">
+                <MudTh>Broker</MudTh>
+                <MudTh>Industry</MudTh>
+                <MudTh>SPA Jurisdiction</MudTh>
+            </AuthorizeView>
+            <MudTh>Enterprise Value</MudTh>
+            <MudTh>Deadline</MudTh>
+            <MudTh>Assigned To</MudTh>
+        </HeaderContent>
+        <GroupHeaderTemplate>
+            <MudTh Style="background-color:var(--mud-palette-background-grey); font-weight: 600; color: var(--mud-palette-primary); line-height: 0.2;"
+               colspan="@_groupRowColumnNumber">
+                @(context.Key)
+            </MudTh>
+        </GroupHeaderTemplate>
+        <RowTemplate>
+            <MudTd DataLabel="Name">@context.Name</MudTd>
+            <AuthorizeView Roles="Broker" Context="authContext">
+                @if (UriPath != "terms-received")
+                {
+                    <MudTd DataLabel="IsDraft">
+                        <MudCheckBox Disabled Checked="@(!context.IsSubmittedToInsurers)" Color="Color.Primary"></MudCheckBox>
+                    </MudTd>
+                }                
+            </AuthorizeView>
+            <AuthorizeView Roles="Insurer" Context="authContext">
+                <MudTd DataLabel="Name">@context.BrokerName</MudTd>
+                <MudTd DataLabel="Industry">@context.Industry</MudTd>
+                <MudTd DataLabel="SPA Jurisdiction">@context.SpaJurisdiction</MudTd>
+            </AuthorizeView>
+            <MudTd DataLabel="EnterpriseValue">@context.EnterpriseValue.ToString()</MudTd>
+            <MudTd DataLabel="Deadline">
+                <MudTooltip Text="@GetDeadlineTooltip(context.SubmissionDeadline)">
+                    <MudText Color="@GetDeadlineColor(context.SubmissionDeadline)">
+                        @context.SubmissionDeadlineString
+                    </MudText>                    
+                </MudTooltip>
+            </MudTd>
+            <MudTd DataLabel="AssignedTo">
+                <MudTooltip Text="@context.AssigneesString">
+                    <MudAvatarGroup Max="3" Spacing="3" MaxColor="Color.Primary">
+                        @foreach (var assignee in @context.Assignees)
+                        {
+                        <MudAvatar>@assignee.Initials</MudAvatar>
+                        }
+                </MudAvatarGroup>
+            </MudTooltip>
+            </MudTd>
+            </RowTemplate>
+    </MudTable>
+}
+
+
+
+@code {
+    [Parameter, EditorRequired] public string UriPath { get; set; } = string.Empty;
+
+    private IList<DealListItemDTO> _deals = new List<DealListItemDTO>();
+    private static string _userId = string.Empty;    
+    private bool _loading = false;
+    private bool _showEmptyTable => (_deals == null || !_deals.Any()) && !_loading;
+    private int _groupRowColumnNumber;
+    private TableGroupDefinition<DealListItemDTO> _groupDefinition = new()
+    {
+        GroupName = "GroupDealsAssignedToLoggedInUser",
+        Indentation = false,
+        Expandable = false,
+        Selector = GroupSelector
+    };
+    private static string GroupSelector(DealListItemDTO item)
+    {
+        if (item.Assignees.Any(a => a.UserId == _userId)) return "Assigned to me";
+        else if (item.Assignees.Any()) return "Assigned to others";
+        else return "Not assigned";
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        _loading = true;
+
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        _userId = authState.User.Claims.GetUserId().ValueOr(string.Empty);
+
+        _groupRowColumnNumber = authState.User.IsInRole("Broker") ? 6 : 8;
+
+        (await Http
+            .GetFromApiAsync<List<DealListItemDTO>>(
+                path: $"api/v1/deals",
+                Snackbar)
+        )
+        .MatchSome(deals =>
+        {
+            _deals = deals 
+                        .OrderByDescending(d => d.Assignees.Count(a => a.UserId == _userId) + d.Assignees.Count()).//ordering hack to get the groups in "GroupSelector()" to show in the order I want them to
+                        ToList();
+
+            if (UriPath == "terms-received")
+            {
+                _deals = _deals.Where(d => d.IsSubmittedToInsurers).ToList();
+            }
+        });
+
+        _loading = false;
+    }
+
+    private void RowClicked(TableRowClickEventArgs<DealListItemDTO> clickEvent) => 
+        Navigation.NavigateTo($"/{UriPath}/{clickEvent.Item.Id}");
+
+    private Color GetDeadlineColor(DateTimeOffset? deadline)
+    {
+        if (deadline == null) return Color.Default;
+
+        return deadline switch
+        {
+            var d when d?.Date <= DateTimeOffset.UtcNow.Date => Color.Error, //current date is after or on the deadline
+            var d when (d?.Date - DateTimeOffset.UtcNow.Date)?.Days <= 3 => Color.Warning, //time between now and the deadline is less than or equal to 3 days
+            _ => Color.Default,
+        };
+    }
+
+    
+    private string GetDeadlineTooltip(DateTimeOffset? deadline) 
+    {
+        if (deadline == null) return string.Empty;
+
+        var daysUntilTheDeadline = (deadline?.Date - DateTimeOffset.UtcNow.Date)?.Days;
+
+        return daysUntilTheDeadline switch
+        {
+            var n when n <= 0 => "The deadline has passed!",
+            1 => "The deadline is tomorrow!",
+            _ => $"There are {daysUntilTheDeadline} days left until the deadline."
+        };
+    }
+}

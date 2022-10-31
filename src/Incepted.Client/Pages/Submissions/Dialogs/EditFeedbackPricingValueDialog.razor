@@ -1,0 +1,58 @@
+﻿<MudDialog @bind-IsVisible="@_dialogControls.IsVisible" Options="@_dialogControls.DefaultDialogOptions">
+    <TitleContent>
+        <MudText Typo="Typo.h6">
+            <MudIcon Icon="@Icons.Outlined.Edit" Class="mr-3" /> Edit @Name
+        </MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudForm @ref="_dialogControls.Form" @bind-IsValid="@_dialogControls.ValidationSuccess">
+            <MudNumericField @bind-Value="Value"
+                                 T="decimal?"
+                                 Immediate
+                                 Variant="Variant.Outlined"
+                                 Format="0.##"
+                                 Min="0"
+                                 HideSpinButtons
+                                 Clearable />
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton id="dialogCancel" OnClick="Cancel">Cancel</MudButton>
+        <MudButton id="dialogSubmit"
+                   Disabled="!_dialogControls.ValidationSuccess || _dialogControls.Processing"
+                   Variant="Variant.Filled"
+                   Color="Color.Primary"
+                   OnClick="@(() => SaveValue())"
+                   Class="px-10">
+            @if (_dialogControls.Processing)
+            {
+                <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate />
+                <MudText Class="ms-2">Saving</MudText>
+            }
+            else
+            {
+                <MudText>Save</MudText>
+            }
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+
+@code {
+    [Parameter] public string Name { get; set; } = string.Empty;
+    [Parameter] public decimal? Value { get; set; }
+    [CascadingParameter] MudDialogInstance MudDialog { get; set; }
+
+    private MudFormDialogControls _dialogControls = new();
+
+    private void Cancel() => MudDialog.Cancel();
+
+    private void SaveValue()
+    {
+        _dialogControls.Processing = true;
+
+        MudDialog.Close(DialogResult.Ok(Value == null ? 0 : Value));
+        
+        _dialogControls.Processing = false;
+    }
+}

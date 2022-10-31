@@ -1,0 +1,34 @@
+﻿@page "/your-submissions"
+
+@using System.Collections.Immutable
+
+@inject IDialogService DialogService
+
+@attribute [Authorize(Roles = "Broker")]
+
+<PageTitle>Submissions - Incepted</PageTitle>
+
+<MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mb-4">
+    <MudText Typo="Typo.h4" Style="font-weight: 500">Submissions</MudText>
+    
+    <MudInceptedButton
+        Id="addDeal"
+        OnClickCallback="OpenAddDealDialog" 
+        StartIcon="@Icons.Outlined.Add"
+        Label="Add" >
+        New Deal
+    </MudInceptedButton>
+    
+</MudStack>
+
+<SubmissionsTable UriPath="your-submissions" />
+
+@code {
+    
+    private void OpenAddDealDialog()
+    {
+        var options = new MudFormDialogControls().DefaultDialogOptions;
+
+        var dialog = DialogService.Show<AddDealDialog>("Add Deal", options);
+    }
+}

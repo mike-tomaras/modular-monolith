@@ -1,0 +1,273 @@
+﻿@using Incepted.Client.Extensions
+@using Incepted.Client.Services
+@using Incepted.Shared.DTOs
+
+
+@inject HttpClient Http
+@inject NavigationManager Navigation
+@inject IDealFileService DealFiles
+@inject ISnackbar Snackbar
+
+@if (_feedbackSubmissionComplete)
+{
+    <MudDialog @bind-IsVisible="_dialogControls.IsVisible" Options="_dialogControls.DefaultDialogOptions">
+        <TitleContent>
+            <MudText Typo="Typo.h6">Quote submitted!</MudText>
+            <MudText Typo="Typo.subtitle1">The broker will be notified and get back to you soon.</MudText>
+        </TitleContent>
+        <DialogContent>
+            <MudStack Justify="Justify.Center" AlignItems="AlignItems.Center" Class="my-4">
+                <SvgSuccessEnvelope />
+                <MudText Typo="Typo.body1" Class="my-4">What do you want to do next?</MudText>
+            </MudStack>
+            <MudStack Row Justify="Justify.SpaceBetween">
+                <MudInceptedButton IsPrimary="false" OnClickCallback="@(() => Navigation.NavigateTo($"/"))">
+                    &nbsp;&nbsp;Go to home screen&nbsp;&nbsp;
+                </MudInceptedButton>
+                <MudInceptedButton IsPrimary OnClickCallback="@(() => Navigation.NavigateTo($"/submissions"))">
+                    Go to submissions
+                </MudInceptedButton>
+            </MudStack>
+        </DialogContent>
+    </MudDialog>
+}
+else
+{
+    <MudDialog @bind-IsVisible="_dialogControls.IsVisible" Options="_dialogControls.DefaultDialogOptions">
+        <TitleContent>
+            <MudText Typo="Typo.h6">Submission overview</MudText>
+            <MudText Typo="Typo.subtitle1">Preview all the details of your quote before submitting it.</MudText>            
+            <MudText Typo="Typo.subtitle1">You can also download the NBI <MudLink @onclick="@Download">here</MudLink>.</MudText>
+        </TitleContent>    
+        <DialogContent>            
+            <MudTabs Elevation="0" Class="mt-4 mb-8" Style="height: 70vh; overflow: auto;">
+                <MudTabPanel Text="Pricing">
+                    <TabContent>
+                        <MudText Typo="Typo.body2">Pricing</MudText>
+                    </TabContent>
+                    <ChildContent>
+                        <MudText Typo="Typo.body1" Class="my-4">De Minimis: <b>@Feedback.Pricing.DeMinimis.ToString()</b></MudText>
+                        <MudDivider />
+                        <MudStack Row>
+                            <MudText Typo="Typo.body1" Class="my-4">Legas/UW fees: <b>@Feedback.Pricing.UwFee.ToString()</b></MudText>
+                            @if(Feedback.Pricing.UwFeeWaiveOption)
+                            {
+                                <MudText Typo="Typo.body2" Class="my-4">(waived if the deal is bound)</MudText>
+                            }
+                        </MudStack>
+                        <MudDivider />
+                        <MudStack Row>
+                            <MudText Typo="Typo.body1" Class="my-4">Break fee: <b>@Feedback.Pricing.BreakFee.ToString()</b></MudText>
+                            @if(Feedback.Pricing.BreakFeeWaiveOption)
+                            {
+                                <MudText Typo="Typo.body2" Class="my-4">(waived if exclusivity is granted)</MudText>
+                            }
+                        </MudStack>
+                        <MudDivider />
+                        <MudSimpleTable Dense Hover="false" Bordered Striped Class="mt-4">
+                            <thead>
+                                <tr>
+                                    <th>Limit</th>
+                                    <th>Retention</th>
+                                    <th>Premium</th>
+                                    <th>RoL</th>
+                                    <th>Enhancements</th>
+                                    <th>Total</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var limit in @Feedback.Pricing.Limits)
+                                {
+                                    var options = @Feedback.Pricing.OptionsOfLimit(limit.Id).ToList();
+
+                                    <tr>
+                                        <td rowspan="@options.Count()">@limit.ToString()</td>
+                                        <td>@options[0].Retention.ToString()</td>
+                                        <td>@options[0].Premium.ToString()</td>
+                                        <td>@($"{PricingCalc.RoL(EnterpriseValue, options[0].Premium, limit):0.##}%")</td>
+                                        <td>@PricingCalc.EnhancementValueString(options[0].Premium, Feedback.Enhancements)</td>
+                                        <td>@PricingCalc.TotalString(options[0].Premium, Feedback.Enhancements, Feedback.Pricing.UwFee)</td>
+                                    </tr>
+                                    @for (int i = 1; i < options.Count(); i++)
+                                    {
+                                        <tr>
+                                            <td>@options[i].Retention.ToString()</td>
+                                            <td>@options[i].Premium.ToString()</td>
+                                            <td>@($"{PricingCalc.RoL(EnterpriseValue, options[i].Premium, limit):0.##}%")</td>
+                                            <td>@PricingCalc.EnhancementValueString(options[i].Premium, Feedback.Enhancements)</td>
+                                            <td>@PricingCalc.TotalString(options[i].Premium, Feedback.Enhancements, Feedback.Pricing.UwFee)</td>
+                                        </tr>
+                                    }                                    
+                                }
+                            </tbody>
+                        </MudSimpleTable>
+                    </ChildContent>
+                </MudTabPanel>
+                <MudTabPanel Text="Enhancements">
+                    <TabContent>
+                        <MudText Typo="Typo.body2">Enhancements and Assumptions</MudText>
+                    </TabContent>
+                    <ChildContent>                        
+                        <MudText Typo="Typo.body2" Class="mt-4"><b>Enhancements you offer</b></MudText>
+                        @foreach(var enhancement in Feedback.Enhancements.Where(e=> e.Type == EnhancementType.Request && e.InsurerOffersIt))
+                        {   
+                            <MudContainer Class="my-4">
+                            <div>
+                                <b>@enhancement.Title</b> - @(enhancement.HasAP ? $"AP: {enhancement.AP*100}" : "No AP")
+                            </div>
+                            @if(enhancement.HasComment)
+                            {
+                                <div><em>Comment:</em>&nbsp;@enhancement.Comment</div>
+                            }
+                            else
+                            {
+                                <div>No Comment</div>
+                            }
+                            </MudContainer>
+                            <MudDivider />
+                        }                        
+                        <MudText Typo="Typo.body2" Class="mt-6"><b>Assumptions</b></MudText>
+                        @foreach(var assumption in Feedback.Enhancements.Where(e=> e.Type == EnhancementType.Assumption))
+                        {   
+                            <MudContainer Class="my-4">
+                            <div>
+                                <b>@assumption.Title</b> <u>@(assumption.InsurerOffersIt ? "YES" : "NO")</u>
+                            </div>
+                            @if(assumption.HasComment)
+                            {
+                                <div><em>Comment:</em>&nbsp;@assumption.Comment</div>
+                            }
+                            else
+                            {
+                                <div>No Comment</div>
+                            }
+                            </MudContainer>
+                            <MudDivider />
+                        }                        
+                    </ChildContent>
+                </MudTabPanel>
+                <MudTabPanel Text="Warranties">
+                    <TabContent>
+                        <MudText Typo="Typo.body2">Warranties</MudText>
+                    </TabContent>
+                    <ChildContent>                        
+                        @foreach(var warranty in Feedback.Warranties.OrderBy(w => w.Order))
+                        {
+                            <MudContainer Class="my-2">
+                            <b>@warranty.Description</b>
+                            <div>Coverage Position: <u>@warranty.CoveragePosition.ToString().ToUpper()</u></div>
+                            <div>Knowledge Scrape: <u>@warranty.KnowledgeScrape.ToString().ToUpper()</u></div>
+                            @if(warranty.HasComment)
+                            {
+                                <div><em>Comment:</em>&nbsp;@warranty.Comment</div>
+                            }
+                            else
+                            {
+                                <div>No Comment</div>
+                            }
+                            </MudContainer>
+                            <MudDivider />
+                        }                        
+                    </ChildContent>
+                </MudTabPanel>
+                <MudTabPanel Text="Exclusions & UW Focus">
+                    <TabContent>
+                        <MudText Typo="Typo.body2">Exclusions & UW Focus</MudText>
+                    </TabContent>
+                    <ChildContent>                        
+                        <MudContainer Class="my-2">
+                            <b>UW focus:</b>: @Feedback.UwFocus.Aggregate(string.Empty, (current, next) => current = $"{current}, {next}")
+                        </MudContainer>
+                        <MudDivider />
+                        <MudText Typo="Typo.body2" Class="mt-4"><b>Exclusions you require</b></MudText>
+                        @foreach(var exclusion in Feedback.Exclusions.Where(e => e.InsurerRequiresIt))
+                        {
+                            <MudContainer Class="my-2">
+                            <b>@exclusion.Title</b> <u>@(exclusion.InsurerRequiresIt ? "YES" : "NO")</u>
+                            @if(exclusion.HasComment)
+                            {
+                                <div><em>Comment:</em> @exclusion.Comment</div>
+                            }
+                            else
+                            {
+                                <div>No Comment</div>
+                            }
+                            </MudContainer>
+                            <MudDivider />                            
+                        }                        
+                    </ChildContent>
+                    </MudTabPanel>            
+            </MudTabs>            
+        </DialogContent>
+        <DialogActions>
+            <MudButton id="dialogCancel" OnClick="Cancel">Cancel</MudButton>
+            <MudButton id="dialogContinue" Disabled="@(_dialogControls.Processing)" Variant="Variant.Filled" Color="Color.Primary" OnClick="SubmitFeedback" Class="px-10">
+                @if (_dialogControls.Processing)
+                {
+                    <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate />
+                    <MudText Class="ms-2">Submitting</MudText>
+                }
+                else
+                {
+                    <MudText>Submit</MudText>
+                }
+            </MudButton>
+        </DialogActions>
+    </MudDialog>
+}
+
+@code {
+    [CascadingParameter] MudDialogInstance MudDialog { get; set; }
+    [Parameter, EditorRequired] public SubmissionFeedbackDTO Feedback { get; set; }
+    [Parameter, EditorRequired] public Money EnterpriseValue { get; set; }
+
+    private MudFormDialogControls _dialogControls = new();
+    private bool _feedbackSubmissionComplete = false;
+
+    protected override void OnInitialized()
+    {
+        _dialogControls.DefaultDialogOptions.MaxWidth = MaxWidth.Large;
+        MudDialog.SetOptions(_dialogControls.DefaultDialogOptions);        
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+
+    private async Task SubmitFeedback()
+    {
+        _dialogControls.Processing = true;
+
+        var payload = new SubmitDealFeedbackDTO(Feedback.Id, Feedback.SubmissionId);
+        
+        (await Http
+            .PutToApiAsync<SubmitDealFeedbackDTO>(
+                path: "api/v1/deals/feedback/submit",
+                payload,
+                Snackbar
+            ))
+            .MatchSome(_ => 
+            {
+                _dialogControls.DefaultDialogOptions.MaxWidth = MaxWidth.Small;
+                MudDialog.SetOptions(_dialogControls.DefaultDialogOptions);
+
+                _feedbackSubmissionComplete = true;        
+            });
+
+        _dialogControls.Processing = false;       
+    }
+
+    private async Task Download()
+    {
+        (await Http
+            .PostToApiAsync<SubmissionFeedbackDTO>(
+                path: "api/v1/docgen/nbi",
+                Feedback,
+                Snackbar
+            ))
+            .MatchSome(async response => 
+                await DealFiles.DownloadFileAsync(
+                    await response.Content.ReadAsByteArrayAsync(), 
+                    $"NBI - {Feedback.Name} - {DateTime.Now.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss")}.docx"
+                )
+            );
+    }
+}

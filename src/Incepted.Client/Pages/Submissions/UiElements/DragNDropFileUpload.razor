@@ -1,0 +1,102 @@
+﻿@using Incepted.Client.Services
+@using Incepted.Shared.DTOs
+@using Incepted.Shared.Enums
+@using System.Collections.Immutable
+@using System.Text
+
+@inject ISnackbar Snackbar
+@inject IDealFileService DealFiles
+@inject HttpClient Http
+
+
+<MudText Typo="Typo.body1" Class="mt-4 ">@Label</MudText>
+<MudPaper @ondragenter="@SetDragClass" @ondragleave="@ClearDragClass" @ondragend="@ClearDragClass" Height="160px" Outlined Class="@_dragClass">
+    @if (!_clearing)
+    {
+        <InputFile OnChange="OnInputFileChanged" class="absolute mud-width-full mud-height-full overflow-hidden z-2" style="opacity:0;" />
+    }
+    <MudStack AlignItems="AlignItems.Center" Justify="Justify.FlexStart">
+        <MudIcon Icon="@Icons.Outlined.DriveFolderUpload" Color="Color.Primary" Style="font-size: 4rem;" />
+        <MudText Typo="Typo.body1" Color="Color.Primary">Click here or drag a file in</MudText>
+    </MudStack>
+    <MudOverlay Visible="_loading" DarkBackground Absolute>
+        <MudProgressCircular Color="Color.Primary" Indeterminate />
+    </MudOverlay>
+</MudPaper>
+
+
+@code {
+    [Parameter] public string Label { get; set; }
+    [Parameter] public DealSubmissionDTO Deal { get; set; }
+    [Parameter] public EventCallback<DealSubmissionDTO> DealChanged { get; set; }
+    [Parameter] public FileType FileType { get; set; }
+
+    private bool _clearing = false;
+    private bool _loading = false;
+    private static string _defaultDragClass = "relative rounded-lg border-2 border-dashed pa-4 mud-width-full mud-height-full";
+    private string _dragClass = _defaultDragClass;
+
+    private async Task OnInputFileChanged(InputFileChangeEventArgs e)
+    {
+        ClearDragClass();
+
+        _loading = true;
+
+        if (FileType == FileType.WarrantyCsv)
+        {
+            var warranties = await ParseCsvForWarranties(e.File);
+            var deal = Deal with { Warranties = warranties.ToImmutable() };
+
+            (await Http
+            .PutToApiAsync(
+                path: $"api/v1/deals",
+                deal,
+                Snackbar
+            ))
+            .MatchSome(async _ =>
+            {
+                Deal = Deal with { Warranties = warranties.ToImmutable() };
+                await DealChanged.InvokeAsync(Deal);
+            });
+        }
+        else
+        {
+            (await DealFiles.UploadFilesAsync(e, Deal.Id, FileType))
+            .MatchSome(async uploadResults =>
+            {
+                uploadResults
+                    .Where(r => !r.Uploaded)
+                    .ToList()
+                    .ForEach(r => Snackbar.Add($"{r.File.FileName}: {r.ErrorCode.errors.name.First()}", Severity.Error));
+
+                var newFiles = uploadResults
+                    .Where(r => r.Uploaded)
+                    .Select(r => r.File);
+
+                Deal = Deal with { Files = Deal.AddFiles(newFiles) };
+                await DealChanged.InvokeAsync(Deal);
+            });
+        }        
+
+        _loading = false;
+    }
+
+    private void SetDragClass() => _dragClass = $"{_defaultDragClass} mud-border-primary";
+
+    private void ClearDragClass() => _dragClass = _defaultDragClass;
+
+    private async Task<IEnumerable<Warranty>> ParseCsvForWarranties(IBrowserFile file)
+    {
+        var buffer = new byte[file.Size];
+        using var stream = file.OpenReadStream(FileValidations.allowedMaxFileSizeBytes);
+        await stream.ReadAsync(buffer);
+        var text = Encoding.ASCII.GetString(buffer);
+        var warranties = text.Split("\r\n")
+                        .Skip(1)
+                        .Where(line => !string.IsNullOrEmpty(line))
+                        .Select((value, index) => new Warranty((uint)index+1, value.Trim()))
+                        .ToList();
+
+        return warranties;
+    }
+}

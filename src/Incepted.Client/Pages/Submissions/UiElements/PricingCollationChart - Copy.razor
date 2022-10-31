@@ -1,0 +1,73 @@
+﻿@using System.Dynamic
+
+<SfChart Title="@(_chartLoading ? "(Refreshing...)" : string.Empty)" Palettes="@_chartPalette" SelectionMode="SelectionMode.Point">
+    <ChartArea><ChartAreaBorder Width="0" /></ChartArea>
+    <ChartPrimaryYAxis LabelFormat="n2" />
+    <ChartPrimaryXAxis ValueType="Syncfusion.Blazor.Charts.ValueType.Category" />
+    <ChartTooltipSettings Enable />
+    <ChartZoomSettings EnablePinchZooming EnableSelectionZooming />
+    <ChartSeriesCollection>
+        @foreach (var seriesName in _chartSeriesNames)
+        {
+            <ChartSeries DataSource="@_chartData" Name="@seriesName" XName="Insurer" YName="@seriesName" Type="ChartSeriesType.Column" />
+        }
+    </ChartSeriesCollection>
+    <ChartLegendSettings Visible="@ShowLegend" Position="@LegendPosition.Right" TextWrap="@TextWrap.Wrap" MaximumLabelWidth="100" />
+</SfChart>
+
+
+@code {
+    [Parameter, EditorRequired] public IEnumerable<SubmissionFeedbackDTO> Feedbacks { get; set; }
+    [Parameter] public bool ShowLegend { get; set; } = false;
+
+    private string[] _chartPalette = new string[] { "#0093DD", "#42A3FF", "#C7E6FF", "#FFF2D9" };
+    private bool _chartLoading;
+    private List<string> _chartSeriesNames = new();
+    private List<ExpandoObject> _chartData = new List<ExpandoObject>();
+
+    protected override async Task OnInitializedAsync() => await Update();
+
+    public async Task Update()
+    {
+        _chartLoading = true;
+        await Task.Yield();//https://www.meziantou.net/don-t-freeze-ui-while-executing-cpu-intensive-work-in-blazor-webassembly.htm
+
+        _chartSeriesNames = new List<string>();
+        _chartData = new List<ExpandoObject>();
+        foreach (var selectedFeedback in Feedbacks)
+        {
+            var flattenedEnabledOptions = selectedFeedback.Pricing.Options
+                .GroupBy(option => option.Limit)
+                .Select(groupingOfOptions =>
+                    groupingOfOptions.Select(option =>
+                        (limit: groupingOfOptions.Key, retention: option.Retention, premium: option.Premium)
+                    )
+                )
+                .SelectMany(option => option)
+                .Where(option => option.limit.Enabled && option.retention.Enabled);
+
+            _chartSeriesNames = 
+                flattenedEnabledOptions
+                .OrderBy(option => option.limit.Value)
+                .ThenBy(option => option.retention.Value)
+                .Select(option => $"L{option.limit}-R{option.retention}")
+                .ToList();
+            _chartData.AddRange(
+                flattenedEnabledOptions
+                .Select(option =>
+                {
+                    dynamic d = new ExpandoObject();
+                    d.Insurer = selectedFeedback.InsuranceCompanyName;
+                    ((IDictionary<string, object>)d)[$"L{option.limit}-R{option.retention}"] =
+                        PricingCalc.Total(option.premium, selectedFeedback.Enhancements, selectedFeedback.Pricing.UwFee);//https://stackoverflow.com/a/10048479
+                    return d;
+                })
+                .Cast<ExpandoObject>().ToList<ExpandoObject>()
+            );
+        }        
+
+        StateHasChanged();
+        await Task.Delay(1);//https://www.meziantou.net/don-t-freeze-ui-while-executing-cpu-intensive-work-in-blazor-webassembly.htm
+        _chartLoading = false;
+    }
+}

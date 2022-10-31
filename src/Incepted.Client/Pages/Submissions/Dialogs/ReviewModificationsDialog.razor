@@ -1,0 +1,43 @@
+﻿@using System.Collections.Immutable
+
+<MudDialog @bind-IsVisible="@_dialogControls.IsVisible" Options="@_dialogControls.DefaultDialogOptions">
+    <TitleContent>
+        <MudText Typo="Typo.h6">Review modifications to the submission</MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudText>
+            See all the modifications to the submission that happened after the broker sent it to you. 
+            You can amend your NBI accordingly and submit or decline using the buttons in the main page.
+        </MudText>
+        <div style="height: 60vh; overflow: auto;">
+            <MudTimeline TimelinePosition="TimelinePosition.Start" TimelineAlign="TimelineAlign.Start" Class="mt-6">
+                @foreach (var modification in Modifications)
+                {
+                    <MudTimelineItem Color="Color.Info">
+                        <MudText Typo="Typo.body2" Class="mud-text-secondary">@modification.TimestampString</MudText>
+                        <MudText Typo="Typo.body1">@modification.Notes</MudText>
+                    </MudTimelineItem>
+                }            
+            </MudTimeline>
+        </div>
+    </DialogContent>
+    <DialogActions>
+        <MudButton id="dialogClose" OnClick="Cancel">Close</MudButton>
+    </DialogActions>
+</MudDialog>
+
+
+@code {
+    [Parameter, EditorRequired] public IImmutableList<Modification> Modifications { get; set; }
+    [CascadingParameter] MudDialogInstance MudDialog { get; set; }
+
+    private MudFormDialogControls _dialogControls = new();
+
+    protected override void OnInitialized()
+    {
+        _dialogControls.DefaultDialogOptions.MaxWidth = MaxWidth.Medium;
+        MudDialog.SetOptions(_dialogControls.DefaultDialogOptions);
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+}

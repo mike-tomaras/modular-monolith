@@ -1,0 +1,64 @@
+﻿<MudCard Elevation="4" Style="height: 280px">
+    <MudCardHeader Class="my-1 py-1">
+        <CardHeaderContent>
+            <MudStack Row Spacing="0" Justify="Justify.FlexEnd">
+                <MudChip Size="Size.Small" Style="visibility: hidden" />
+                @if (HasBestCoverage)
+                {
+                    <MudChip Size="Size.Small" Style="border-radius: 5px" Class="purple darken-3 shades-text text-white">Coverage</MudChip>
+                }
+                @if (HasBestPrice)
+                {
+                    <MudChip Size="Size.Small" Style="border-radius: 5px" Class="red darken-1 shades-text text-white">Price</MudChip>
+                }
+                @if (HasBestDeminimis)
+                {
+                    <MudChip Size="Size.Small" Style="border-radius: 5px" Class="blue darken-1 shades-text text-white">De Minimis</MudChip>
+                }                
+            </MudStack>
+            <MudText Typo="Typo.body1" Class="mt-2" Style="font-weight: 600">@Feedback.InsuranceCompanyName</MudText>
+        </CardHeaderContent>        
+    </MudCardHeader>
+    <MudCardContent Class="my-1 py-1">
+        <MudStack Row Justify="Justify.SpaceBetween">
+            <MudStack>
+                <div>
+                    <MudText Typo="Typo.h6" Class="mt-4">Min Price</MudText>
+                    <MudText Typo="Typo.body1" Class="ml-4">@_minPrice</MudText>
+                </div>
+                <div>
+                    <MudText Typo="Typo.h6" Class="mt-6">De minimis</MudText>
+                        <MudText Typo="Typo.body1" Class="ml-4">@(Feedback.Pricing.DeMinimis.ToString())</MudText>
+                </div>
+            </MudStack>
+            <MudStack AlignItems="AlignItems.Center" Class="mr-4">
+                <MudText Typo="Typo.h6" Class="mt-4">Coverage</MudText>
+                <div style="display: grid;">
+                    <div style="@($"{_coverageCenterCss} font-size:medium; text-align: center; padding: 22px 0;")">@(_coveragePct)%</div>
+                    <MudProgressCircular Color="Color.Primary" Value="_coveragePct" Style="@_coverageCenterCss" />
+                </div>                
+            </MudStack>
+        </MudStack>
+    </MudCardContent>
+</MudCard>
+
+
+@code {
+    [Parameter, EditorRequired] public SubmissionFeedbackDTO Feedback { get; set; }
+    [Parameter] public bool HasBestPrice { get; set; } = false;
+    [Parameter] public bool HasBestCoverage { get; set; } = false;
+    [Parameter] public bool HasBestDeminimis { get; set; } = false;
+
+    private string _coverageCenterCss = "height:70px; width:70px; grid-column: 1; grid-row: 1;";
+    private double _coveragePct = 0;
+    private string _minPrice;
+
+    protected override void OnInitialized()
+    {
+        _coveragePct = CoverageCalc.CoveragePcnt(Feedback.Warranties);
+
+        var minPrice = Feedback.Pricing.Options
+                .Min(option => PricingCalc.Total(option.Premium, Feedback.Enhancements, Feedback.Pricing.UwFee));
+        _minPrice = $"{minPrice:N2} {Feedback.Pricing.EnterpriseValue.Currency}";
+    }
+}

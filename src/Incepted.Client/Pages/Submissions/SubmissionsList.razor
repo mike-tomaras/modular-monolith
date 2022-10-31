@@ -1,0 +1,9 @@
+﻿@page "/submissions"
+
+@attribute [Authorize(Roles = "Insurer")]
+
+<PageTitle>Submissions - Incepted</PageTitle>
+
+<MudText Typo="Typo.h4" Style="font-weight: 500">Submissions</MudText>    
+
+<SubmissionsTable UriPath="submissions" />

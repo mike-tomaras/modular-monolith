@@ -1,0 +1,39 @@
+﻿@if (ChartType != "Exclusions")
+{
+    <MudText Class="mb-4 mx-6">
+        You can zoom in the chart by clicking and dragging an area. The zoom tools will appear.
+        You can also select specific chart series by clicking the bars or the legend items.
+    </MudText>
+}
+
+@if (ChartType == "Pricing")
+{
+    <ChartForPricingCollation Feedbacks="Feedbacks" ShowLegend="true" />
+}
+else if (ChartType == "De minimis")
+{
+    <ChartForDeminimisCollation Feedbacks="Feedbacks" />
+}
+else if (ChartType == "Coverage")
+{
+    <ChartForCoverageCollation Feedbacks="Feedbacks" />
+}
+else if (ChartType == "Exclusions")
+{
+    <MatrixForExclusionCollation Feedbacks="Feedbacks" ShowOnlyNonStandardExclusions="false" />
+}
+
+
+@code {
+    [Parameter, EditorRequired] public IEnumerable<SubmissionFeedbackDTO> Feedbacks { get; set; }
+    [Parameter, EditorRequired] public string ChartType { get; set; }
+    [CascadingParameter] MudDialogInstance MudDialog { get; set; }
+
+    private MudFormDialogControls _dialogControls = new();
+
+    protected override void OnInitialized()
+    {
+        _dialogControls.DefaultDialogOptions.FullScreen = true;
+        MudDialog.SetOptions(_dialogControls.DefaultDialogOptions);
+    }
+}

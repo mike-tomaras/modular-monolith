@@ -1,0 +1,35 @@
+﻿@page "/authentication/{action}"
+
+@using Microsoft.AspNetCore.Components.WebAssembly.Authentication
+@using Microsoft.Extensions.Configuration
+@using System.Diagnostics.CodeAnalysis
+
+@inject NavigationManager Navigation
+@inject IConfiguration Configuration
+
+@attribute [ExcludeFromCodeCoverage]
+
+<RemoteAuthenticatorView Action="@Action">
+    <LoggingIn>
+        <AuthLoader Message="Logging in..." />
+    </LoggingIn>
+    <CompletingLoggingIn>
+        <AuthLoader Message="Completing your log in..." />
+    </CompletingLoggingIn>
+    <LogOut>
+        <AuthLoader Message="Logging you out..." />
+        @{
+            var authority = (string)Configuration["Auth0:Authority"];
+            var clientId = (string)Configuration["Auth0:ClientId"];
+
+            Navigation.NavigateTo($"{authority}/v2/logout?client_id={clientId}");
+        }
+    </LogOut>
+    <LogOutSucceeded>
+        <AuthLoader Message="Logging you out..." />
+    </LogOutSucceeded>
+</RemoteAuthenticatorView>
+
+@code {
+    [Parameter] public string? Action { get; set; }
+}

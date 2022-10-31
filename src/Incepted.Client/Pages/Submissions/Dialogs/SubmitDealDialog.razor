@@ -1,0 +1,237 @@
+﻿@using Incepted.Client.Extensions
+@using Incepted.Shared.DTOs
+@using System.Collections.Immutable
+@using Incepted.Shared.Enums
+
+@inject HttpClient Http
+@inject NavigationManager Navigation
+@inject ISnackbar Snackbar
+
+@if (_loading)
+{
+    <div class="d-flex justify-center my-4">
+        <MudProgressCircular Color="Color.Primary" Size="Size.Large" Indeterminate />
+    </div>
+}
+else if (_submissionComplete)
+{
+    <MudDialog @bind-IsVisible="_dialogControls.IsVisible" Options="_dialogControls.DefaultDialogOptions">
+        <TitleContent>
+            <MudText Typo="Typo.h6">Submission sent!</MudText>
+            <MudText Typo="Typo.subtitle1">The insurers will be notified and start providing NBIs soon.</MudText>
+        </TitleContent>
+        <DialogContent>
+            <MudStack Justify="Justify.Center" AlignItems="AlignItems.Center" Class="my-4">
+                <SvgSuccessEnvelope />
+                <MudText Typo="Typo.body1" Class="my-4">What do you want to do next?</MudText>
+            </MudStack>
+            <MudStack Row Justify="Justify.SpaceBetween">
+                <MudInceptedButton IsPrimary="false" OnClickCallback="@(() => Navigation.NavigateTo($"/"))">
+                    &nbsp;&nbsp;Go to home screen&nbsp;&nbsp;
+                </MudInceptedButton>
+                <MudInceptedButton IsPrimary OnClickCallback="CloseWithResult">
+                    Go back to the deal
+                </MudInceptedButton>
+            </MudStack>
+        </DialogContent>
+    </MudDialog>
+}
+else
+{
+    <MudDialog @bind-IsVisible="_dialogControls.IsVisible" Options="_dialogControls.DefaultDialogOptions">
+        <TitleContent>
+            @if (IsSubmittedToInsurers)
+            {
+                <MudText Typo="Typo.h6">Modify the submission</MudText>
+            }
+            else
+            {
+                <MudText Typo="Typo.h6">Submit to insurers</MudText>
+                <MudText Typo="Typo.subtitle1">Who do you want to send this submission to?</MudText>
+            }
+        </TitleContent>
+        <DialogContent>
+            <MudForm @ref="_dialogControls.Form" @bind-IsValid="@_dialogControls.ValidationSuccess">
+                @if (HasUnsavedChanges)
+                {
+                    <MudAlert Severity="Severity.Warning">
+                        You have unsaved changes! Please save the deal if you want to include them in the submission.
+                    </MudAlert>
+                }
+                @if (IsSubmittedToInsurers)
+                {
+                    <MudText Typo="Typo.body1" Class="mb-4">Some insurers have already been contacted for this submission. Let them know what changed.</MudText>
+                    <MudTextField @bind-Value="@_changeNotes"
+                          Label="Change Notes"
+                          Variant="Variant.Outlined"
+                          Lines="15"
+                          Validation="@(new Func<string, IEnumerable<string>>(ValidateMaxCharacters))"
+                          Counter="5000"
+                          Immediate />
+                }
+                else
+                {
+                    <MudText Typo="Typo.body1" Class="my-4">Insurers (select from partnering insurance companies)</MudText>
+                    <MudSelect T="CompanyDTO"
+                       Variant="Variant.Outlined"
+                       SelectAll
+                       MultiSelection
+                       Required
+                       RequiredError="You must select at least one company to send the deal to"
+                       @bind-SelectedValues="_selectedInsurerCompanies">
+                        @foreach (var company in _allInsurerCompanies)
+                        {
+                            <MudSelectItem T="CompanyDTO" Value="@company">@company.Name</MudSelectItem>
+                        }
+                    </MudSelect>
+                    @*<MudStack Row Justify="Justify.SpaceBetween" Class="mt-8">
+            <MudText Typo="Typo.body1">New insurers (add emails to send to)</MudText>
+            <MudFab Color="Color.Primary"
+            StartIcon="@Icons.Outlined.Add"
+            Size="Size.Small"
+            OnClick="@(() => _newEmailsToSubmitTo.Add(string.Empty))" />
+            </MudStack>
+            @foreach (var newEmail in _newEmailsToSubmitTo.Select((e, i) => new { Item = e, Index = i }))
+            {
+            <MudTextField Value="newEmail.Item"
+            ValueChanged="@((string val) => _newEmailsToSubmitTo[newEmail.Index] = val)"
+            Mask="@(RegexMask.Email())"
+            Variant="Variant.Outlined"
+            Label="Insurer email"/>
+            }*@
+                    <MudDatePicker Label="Deadline date"
+                           @bind-Date="_deadlineDate"
+                           Required
+                           RequiredError="You have to select a deadline date in order to submit the deal for feedback"
+                           MinDate="DateTime.Now.AddDays(1).Date"
+                           Class="my-4" />
+                    <MudTimePicker Label="Deadline time"
+                           @bind-Time="_deadlineTime"
+                           Class="my-8" />
+                }
+            </MudForm>
+        </DialogContent>
+        <DialogActions>
+            <MudButton id="dialogCancel" OnClick="Cancel">Cancel</MudButton>
+            <MudButton id="dialogSubmit" Disabled="@(!_dialogControls.ValidationSuccess || _dialogControls.Processing)" Variant="Variant.Filled" Color="Color.Primary" OnClick="SubmitDeal" Class="px-10">
+                @if (_dialogControls.Processing)
+                {
+                    <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate />
+                    <MudText Class="ms-2">Submitting</MudText>
+                }
+                else
+                {
+                    <MudText>Submit</MudText>
+                }
+            </MudButton>
+        </DialogActions>
+    </MudDialog>
+}
+
+
+@code {
+    [CascadingParameter] MudDialogInstance MudDialog { get; set; }
+    [Parameter, EditorRequired] public Guid DealId { get; set; }
+    [Parameter, EditorRequired] public DateTime? SelectedDeadline { get; set; }
+    [Parameter, EditorRequired] public IEnumerable<Guid> SelectedInsurerCompanies { get; set; }
+    [Parameter, EditorRequired] public bool HasUnsavedChanges { get; set; }
+    [Parameter, EditorRequired] public bool IsSubmittedToInsurers { get; set; }
+
+    private MudFormDialogControls _dialogControls = new();
+    private bool _submissionComplete = false;
+    private bool _loading = false;
+    private IImmutableList<CompanyDTO> _allInsurerCompanies = ImmutableList.Create<CompanyDTO>();
+    private IEnumerable<CompanyDTO> _selectedInsurerCompanies = new HashSet<CompanyDTO>();
+    private List<string> _newEmailsToSubmitTo = new List<string> { string.Empty };
+    private DateTime? _deadlineDate;
+    private TimeSpan? _deadlineTime;
+    private string _changeNotes;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (IsSubmittedToInsurers) return;
+
+        _loading = true;
+
+        _deadlineDate = SelectedDeadline == null ? null : SelectedDeadline.Value.Date;
+        _deadlineTime = SelectedDeadline == null ? null : SelectedDeadline.Value.TimeOfDay;
+
+        (await Http
+            .GetFromApiAsync<IEnumerable<CompanyDTO>>(
+                path: $"api/v1/company/all?type={(int)CompanyType.Insurer}",
+                Snackbar
+            ))
+            .MatchSome(companies =>
+            {
+                _allInsurerCompanies = companies.ToImmutable();
+                _selectedInsurerCompanies = _allInsurerCompanies
+                                                 .Where(i => SelectedInsurerCompanies.Any(sel => sel == i.Id))
+                                                 .ToHashSet();
+            });
+
+        _loading = false;
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+
+    private void CloseWithResult()
+    {
+        if (IsSubmittedToInsurers)
+        {
+            MudDialog.Close();
+            return;
+        }
+
+        var deadline = (DateTime)(_deadlineDate.Value + _deadlineTime);
+
+        var payload = new SubmitDealDTO(
+            DealId,
+            _selectedInsurerCompanies.ToImmutable(),
+            DateTime.SpecifyKind(deadline, DateTimeKind.Local));
+
+        MudDialog.Close(payload);
+    }
+
+    private async Task SubmitDeal()
+    {
+        _dialogControls.Processing = true;
+
+        if (IsSubmittedToInsurers)
+        {
+            var payload = new ModifySubmittedDealDTO(DealId, _changeNotes);
+
+            (await Http
+                .PutToApiAsync<ModifySubmittedDealDTO>(
+                    path: "api/v1/deals/modifysubmission",
+                    payload,
+                    Snackbar
+                ))
+                .MatchSome(_ => _submissionComplete = true);
+        }
+        else
+        {
+            var deadline = (DateTime)(_deadlineDate.Value + _deadlineTime);
+
+            var payload = new SubmitDealDTO(
+                DealId,
+                _selectedInsurerCompanies.ToImmutable(),
+                DateTime.SpecifyKind(deadline, DateTimeKind.Local));
+
+            (await Http
+                .PutToApiAsync<SubmitDealDTO>(
+                    path: "api/v1/deals/submit",
+                    payload,
+                    Snackbar
+                ))
+                .MatchSome(_ => _submissionComplete = true);
+        }
+
+        _dialogControls.Processing = false;
+    }
+
+    private IEnumerable<string> ValidateMaxCharacters(string ch)
+    {
+        if (!string.IsNullOrEmpty(ch) && 5000 < ch?.Length)
+            yield return $"5000 characters is the maximum the change notes can be";
+    }
+}

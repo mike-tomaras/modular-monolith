@@ -1,0 +1,31 @@
+﻿<MudTable Elevation="0" Striped Items="@Feedbacks">
+    <HeaderContent>
+        <MudTh></MudTh>
+        @foreach (var exclusion in _exlusions)
+        {
+            <MudTh>@exclusion</MudTh>
+        }
+    </HeaderContent>
+    <RowTemplate>
+        <MudTd DataLabel="Insurer">@context.InsuranceCompanyName</MudTd>
+        @foreach (var exclusion in _exlusions)
+        {
+            <MudTd DataLabel="@exclusion" Style="text-align: center;">
+                @if (context.Exclusions.Single(w => w.Title == exclusion).InsurerRequiresIt)
+                {
+                    <MudIcon Size="Size.Large" Icon="@Icons.Outlined.Check" />
+                }
+            </MudTd>
+        }
+    </RowTemplate>
+</MudTable>
+
+
+@code {
+    [Parameter, EditorRequired] public IEnumerable<SubmissionFeedbackDTO> Feedbacks { get; set; }
+    [Parameter, EditorRequired] public bool ShowOnlyNonStandardExclusions { get; set; }
+
+    private IEnumerable<string> _exlusions => ShowOnlyNonStandardExclusions ? _nonStandardExclusions : Exclusion.Factory.Default.Select(e => e.Title);
+
+    private string[] _nonStandardExclusions = new[] { "Environmental", "Cyber / IT", "Compliance with Laws", "Transfer pricing" };
+}

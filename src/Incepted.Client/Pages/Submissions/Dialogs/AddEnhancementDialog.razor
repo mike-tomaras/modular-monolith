@@ -1,0 +1,71 @@
+﻿@using Incepted.Client.Extensions
+@using Incepted.Shared.DTOs
+@using Incepted.Shared.Enums
+@using Incepted.Shared.ValueTypes
+
+
+<MudDialog @bind-IsVisible="_dialogControls.IsVisible" Options="_dialogControls.DefaultDialogOptions">
+    <TitleContent>
+        <MudText Typo="Typo.h6">
+            <MudIcon Icon="@Icons.Outlined.Add" Class="mr-3" /> Add a new @Type.ToString()
+        </MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudForm @ref="_dialogControls.Form" @bind-IsValid="@_dialogControls.ValidationSuccess">
+            <MudTextField @bind-Value="@_newEnhancementTitle"
+                          Variant="Variant.Outlined"
+                          Immediate
+                          Required
+                          RequiredError="You must specify the Title"
+                          Label="Title">
+            </MudTextField>
+            <MudTextField @bind-Value="@_newEnhancementDescription"
+                          Variant="Variant.Outlined"
+                          Immediate
+                          Lines="5"  
+                          Required                                                  
+                          RequiredError="You must specify a description"
+                          Label="Description">
+            </MudTextField>
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancel</MudButton>
+        <MudButton Disabled="@(!_dialogControls.ValidationSuccess || _dialogControls.Processing)" Variant="Variant.Filled" Color="Color.Primary" OnClick="AddEnhancement" Class="px-10">
+            @if (_dialogControls.Processing)
+            {
+                <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate />
+                <MudText Class="ms-2">Adding</MudText>
+            }
+            else
+            {
+                <MudText>Add</MudText>
+            }
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+
+@code {
+    [CascadingParameter] MudDialogInstance MudDialog { get; set; }
+    [Parameter, EditorRequired] public EnhancementType Type { get; set; }
+
+    private MudFormDialogControls _dialogControls = new();
+    private string _newEnhancementTitle;
+    private string _newEnhancementDescription;
+
+    void Cancel() => MudDialog.Cancel();  
+
+    private void AddEnhancement()
+    {
+        _dialogControls.Processing = true;
+
+        var newEnhancement = new Enhancement(Type, _newEnhancementTitle, _newEnhancementDescription, string.Empty, 0, true, false);
+
+        _dialogControls.IsVisible = false;
+        _dialogControls.Processing = false;
+        MudDialog.Close(DialogResult.Ok(newEnhancement));
+    }
+
+  
+}

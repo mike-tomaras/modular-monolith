@@ -1,0 +1,164 @@
+﻿@using Incepted.Client.Extensions
+@using Incepted.Shared.DTOs
+@using System.Collections.Immutable
+
+@inject HttpClient Http
+@inject ISnackbar Snackbar
+
+@if (_loading)
+{
+    <div class="d-flex justify-center my-4">
+        <MudProgressCircular Color="Color.Primary" Size="Size.Large" Indeterminate />
+    </div>
+}
+else
+{
+    <MudDialog @bind-IsVisible="@_dialogControls.IsVisible" Options="@_dialogControls.DefaultDialogOptions">
+        <TitleContent>
+            <MudText Typo="Typo.h6">
+                <MudIcon Icon="@Icons.Outlined.Edit" Class="mr-3" /> Assign people to the deal
+            </MudText>
+        </TitleContent>
+        <DialogContent>
+            <MudStack id="assigneesSummary" AlignItems="AlignItems.Center" Spacing="1" Row>
+                <MudText Typo="Typo.body1" Class="mb-4">Colleagues assigned to this deal:</MudText>
+                <MudText Typo="Typo.h5" Class="mb-4">@Assignees.Count()</MudText>
+            </MudStack>
+            <MudAutocomplete @ref="_autoComplete"
+                             T="EmployeeDTO"
+                             Label="Type or select a colleague"
+                             SearchFunc="Search"
+                             ValueChanged="AddAssignee"
+                             CoerceText
+                             ResetValueOnEmptyText
+                             Variant="Variant.Outlined"
+                             Class="mb-5" />
+            <MudChipSet AllClosable OnClose="RemoveAssignee">
+                @foreach (var assignee in Assignees)
+                {
+                    <MudChip Text="@assignee.FullName"></MudChip>
+                }
+            </MudChipSet>
+        </DialogContent>
+        <DialogActions>
+            <MudButton id="dialogCancel" OnClick="Cancel">Cancel</MudButton>
+            <MudButton id="dialogSubmit"
+                       Disabled="@(!_dialogControls.ValidationSuccess || _dialogControls.Processing)"
+                       Variant="Variant.Filled"
+                       Color="Color.Primary"
+                       OnClick="@(() => UpdateAssignees())"
+                       Class="px-10">
+                @if (_dialogControls.Processing)
+                {
+                    <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate />
+                    <MudText Class="ms-2">Assigning</MudText>
+                }
+                else
+                {
+                    <MudText>Assign</MudText>
+                }
+            </MudButton>
+        </DialogActions>
+    </MudDialog>
+
+}
+
+
+@code {
+    [Parameter] public Guid DealId { get; set; } = Guid.Empty;
+    [Parameter] public IImmutableList<EmployeeDTO> Assignees { get; set; } = ImmutableList.Create<EmployeeDTO>();
+    [CascadingParameter] MudDialogInstance MudDialog { get; set; }
+
+    private MudAutocomplete<EmployeeDTO>? _autoComplete { get; set; }
+    private bool _loading { get; set; }
+    private MudFormDialogControls _dialogControls = new();
+    private IImmutableList<EmployeeDTO> _allEmployees = ImmutableList.Create<EmployeeDTO>();
+    private IImmutableList<EmployeeDTO> _backupCopyOfAssignees = ImmutableList.Create<EmployeeDTO>();
+
+    protected override async Task OnInitializedAsync()
+    {
+        _loading = true;
+
+        (await Http
+            .GetFromApiAsync<IEnumerable<EmployeeDTO>>(
+                path: "api/v1/company/employees",
+                Snackbar
+            ))
+            .MatchSome(employees =>
+            {
+                _allEmployees = employees.ToImmutable();
+                _backupCopyOfAssignees = Assignees.ToImmutable();
+
+                _loading = false;
+            });
+
+        Validate();
+    }
+
+    void Cancel() => MudDialog.Cancel();
+
+    private Task<IEnumerable<EmployeeDTO>> Search(string value)
+    {
+        if (string.IsNullOrEmpty(value)) // if text is null or empty, show complete list
+            return Task.FromResult(_allEmployees.AsEnumerable());
+
+        return Task.FromResult(_allEmployees.Where(a => a.FullName.Contains(value, StringComparison.InvariantCultureIgnoreCase)));
+    }
+
+    private void Validate()
+    {
+        if (Assignees.Any())
+        {
+            _dialogControls.ValidationSuccess = true;
+        }
+        else
+        {
+            _dialogControls.ValidationSuccess = false;
+            Snackbar.Add("You must select at least one assignee.", Severity.Error);
+        }
+    }
+
+    private void AddAssignee(EmployeeDTO value)
+    {
+        if (value == null) return;
+
+        if (!Assignees.Any(a => a.Id == value.Id)) Assignees = Assignees.Add(value);
+
+        Task.Delay(500).ContinueWith(_ => _autoComplete.Clear());
+
+        Validate();
+    }
+
+    private void RemoveAssignee(MudChip chip)
+    {
+        Assignees = Assignees.Remove(a => a.FullName == chip.Text);
+
+        Validate();
+    }
+
+    private async Task UpdateAssignees()
+    {
+        _dialogControls.Processing = true;
+
+        var updateDto = new UpdateDealAssigneesDTO(DealId, Assignees.ToImmutable());
+        (await Http
+            .PutToApiAsync(
+                path: "api/v1/deals/assignees", 
+                content: updateDto,
+                Snackbar
+            ))
+            .Match(
+                some: employees =>
+                {
+                    Snackbar.Add("Assignees updated successfully", Severity.Success);
+                    _dialogControls.Processing = false;
+                    MudDialog.Close(DialogResult.Ok(Assignees));
+                },
+                none: () =>
+                {
+                    Assignees = _backupCopyOfAssignees;
+                    _dialogControls.Processing = false;
+                }
+            );
+    }
+}
